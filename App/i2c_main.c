@@ -3,10 +3,23 @@
 #include "../Drivers/hal_i2c_driver.h"
 #include "../Drivers/hal_gpio_driver.h"
 #include "../App/i2c_main.h"
+#include "../Drivers/imu.h"
 #include "../App/led.h"
 //#define I2C_MASTER_MODE_EN
 
 #define SLAVE_OWN_ADDRESS      (uint8_t)0x53;
+/** only one slave - mpu9520
+		The slave address IN IMU.h
+		
+	 but not only one addrress
+	 TODO: take all the address
+	 #define MPU9250_ADDRESS 0x69
+	 #define AK8963_ADDRESS   0x0C
+	 these are used in imu codes does it need it there? yes.
+	 better leave them for local reference.
+	 or later put them in main.
+**/
+
 #define SLAVE_ADDRESS_READ    (uint8_t) 0xA7
 #define SLAVE_ADDRESS_WRITE    (uint8_t) 0xA6
 
@@ -110,9 +123,10 @@ int main(void)
 {
 	uint32_t val;
 	led_init();
- 
-	i2c_gpio_init();
 	
+	i2c_gpio_init();
+	ImuState_t imu_state;
+	imu_state.gscale =  GFS_250DPS;
 		/* Configure USER Button */
 #ifdef I2C_MASTER_MODE_EN
  hal_gpio_configure_interrupt(0, INT_FALLING_EDGE, gpio_btn_interrupt_handler);

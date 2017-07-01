@@ -224,4 +224,4 @@ void hal_i2c_slave_rx(i2c_handle_t *handle, uint8_t *buffer, uint32_t len);
 void HAL_I2C_EV_IRQHandler(i2c_handle_t *hi2c);
 void HAL_I2C_ER_IRQHandler(i2c_handle_t *hi2c);
 
-#endif 
+#endif

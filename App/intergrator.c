@@ -4,6 +4,8 @@
 #include "../Drivers/hal_spi_driver.h"
 #include "../Drivers/hal_i2c_driver.h"
 #include "../Drivers/hal_uart_driver.h"
+#include "../Drivers/imu.h"
+#include "../Drivers/servo.h"
 
 #include "../App/spi_main.h"
 #include "../App/uart_main.h"
@@ -11,6 +13,15 @@
 
 #include "../App/led.h"
 #include "../Drivers/uart_debug.h"
+#include <stdio.h>
+#include <stdlib.h> //free
+#include <math.h>
+//Safer asprintf macro
+#define Sasprintf(write_to, ...) { \
+		char *tmp_string_for_extend = (write_to); \
+		asprintf(&(write_to), __VA_ARGS__); \
+		free(tmp_string_for_extend); \
+}
 
 /** Connection diagram 
 		
@@ -91,6 +102,67 @@ extern void HAL_NVIC_EnableIRQ(IRQn_Type IRQn);
 
 /* I2C configuration */
 
+
+/* project variables */
+
+// structure to hold experimental sensor data from sensor nodes
+typedef struct
+{ //total 32 byte of
+  uint32_t angularSpeed;  // 2 bytes (speed value : 2byte uint32_t 16bit pwm; number sample points wrod 0-63655| byte)
+  uint32_t msgLength;    // 1-14 data
+
+  uint32_t data0;    // 1 data points in uint32_t
+  uint32_t data1;    // 1 data points in uint32_t
+  uint32_t data2;    // 1 data points in uint32_t
+  uint32_t data3;    // 1 data points in uint32_t
+  uint32_t data4;    // 1 data points in uint32_t
+  uint32_t data5;    // 1 data points in uint32_t
+  uint32_t data6;    // 1 data points in uint32_t
+  uint32_t data7;    // 1 data points in uint32_t
+  uint32_t data8;    // 1 data points in uint32_t
+  uint32_t data9;    // 1 data points in uint32_t
+  uint32_t data10;   // 1 data points in uint32_t
+  uint32_t data11;   // 1 data points in uint32_t
+  uint32_t data12;   // 1 data points in uint32_t
+  uint32_t data13;   // 1 data points in uint32_t
+  // total 1 to 13 uint32_t of data
+} ExperimentPayload;
+
+// structure to hold experimental configuration data from users
+typedef struct 
+{
+  uint32_t numb_transmit_record;
+  uint32_t sensorNumber;//SENSORNUM;
+  uint32_t rotationSpeedIncrement;//1;   // I length of bootloader hex data (bytes)
+  uint32_t measurmentFrequency;//20; //F
+  uint32_t requiredSampleTime;//20; // required time each sampleing loop
+  uint32_t requiredSampleNumber;//18; //M
+  uint32_t rotationDirection;//1; //1 for clockwise 0 for anticlockwise;
+  uint32_t pauseTime;//1; //1 for clockwise 2 for anticlockwise;
+  uint32_t restartValue;//1; //1 for clockwise 2 for anticlockwise;
+  uint32_t speed_offset;//20;
+  uint32_t pwmLimit;//132;
+  uint32_t arm;//53;
+  float coefficient_yaw;//0.1;
+  uint32_t sinage[SENSORNUM];//{1};
+  uint32_t increment_waiting_time [SENSORNUM];//{2};
+} ExperimentSetting;
+
+
+
+typedef struct {
+  uint32_t pwmSpeed;//90;   // I length of bootloader hex data (bytes)
+  uint32_t sampleCounter;//0; //when came out of the measurement loop then store the counter here and catch up from where left off
+  uint32_t waitingDelay;//30; //frequency delay between measuemrents
+  bool completeMeasurementLoop;//false;
+  uint32_t prevRotation;//1;
+  float sound_speed;//340.29;
+  uint32_t repeatedErrorCount[SENSORNUM];//{0};
+  uint32_t noErrorCount[SENSORNUM];//{0};
+  uint32_t waitingTime[SENSORNUM];//{0};
+  bool triggered[SENSORNUM];//{false};
+  bool recieved[SENSORNUM];//{false};
+} ExperimentStatus;
 
 ///////////////////////////////////Initialisation Functions////////////////////////////////
 /* configure gpio for spi functionality */
@@ -180,14 +252,167 @@ void uart_gpio_init(void)
 	hal_gpio_init(GPIOA ,&uart_pin_conf);
 
 }
-
+void pin_init(){
+	// Pin definitions 
+	//TODO: GPIO init
+	int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
+	int adoPin = 8;
+	int myLed = 13;
+//TODO: GPIO init
+	
+	//Servo myservo; //download the servo library and inspect how it works and use it in C code later
+	const int esc_sig_pin = SERVO_PIN; // any pwm available pin (3, 6, 9, 11) on atmel atmega328
+//	pinMode(intPin, INPUT);
+//  digitalWrite(intPin, LOW);
+//  pinMode(adoPin, OUTPUT);
+//  digitalWrite(adoPin, HIGH);
+//  pinMode(myLed, OUTPUT);
+//  digitalWrite(myLed, HIGH);
+}
 
 /////////////////////////////////////other functions before main/////////////////////
 /* some delay generation */
-void delay_gen( )
+void delay_gen(uint32_t cnt)
 {
-	uint32_t cnt = 800000;
+	//uint32_t cnt = 800000;
 	while(cnt--);
+}
+/**
+IMU init function
+**/
+void imu_init(ImuState_t *imu_state)
+{
+	
+	imu_state->GyroMeasError = PI * (40.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
+	imu_state->GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
+	// There is a tradeoff in the beta parameter between accuracy and response speed.
+	// In the original Madgwick study, beta of 0.041 (corresponding to GyroMeasError of 2.7 degrees/s) was found to give optimal accuracy.
+	// However, with this value, the LSM9SD0 response time is about 10 seconds to a stable initial quaternion.
+	// Subsequent changes also require a longish lag time to a stable output, not fast enough for a quadcopter or robot car!
+	// By increasing beta (GyroMeasError) by about a factor of fifteen, the response time constant is reduced to ~2 sec
+	// I haven't noticed any reduction in solution accuracy. This is essentially the I coefficient in a PID control sense;
+	// the bigger the feedback coefficient, the faster the solution converges, usually at the expense of accuracy.
+	// In any case, this is the free parameter in the Madgwick filtering and fusion scheme.
+
+	imu_state->beta = sqrt(3.0f / 4.0f) * imu_state->GyroMeasError;   // compute beta
+	imu_state->zeta = sqrt(3.0f / 4.0f) * imu_state->GyroMeasDrift;   // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
+	//import math library to calculate
+	
+	imu_state->gscale =  GFS_250DPS;
+	imu_state->ascale = AFS_2G;
+	imu_state->mscale = MFS_16BITS; // Choose either 14-bit or 16-bit magnetometer resolution
+	imu_state->mmode = 0x06;        // 2 for 8 Hz, 6 for 100 Hz continuous magnetometer data read
+	for(int i = 0; i < 3; i++){
+		imu_state->magCalibration[i]= 0;
+		imu_state->magBias[i]= 0;
+		imu_state->magScale[i]= 0;
+		imu_state->accelBias[i]= 0;
+		imu_state->gyroBias[i]= 0;
+		imu_state->q[i+1] =0.0f;
+		imu_state->eInt[i] =0.0f;
+	}
+	imu_state->delt_t = 0; // used to control display output rate
+	imu_state->prevMeasure = 0, imu_state->sumCount = 0; // used to control display output rate
+	imu_state->deltat = 0.0f, imu_state->sum = 0.0f; // integration interval for both filter schemes
+	imu_state->lastUpdate = 0, imu_state->firstUpdate = 0; // used to calculate integration interval
+	imu_state->Now = 0;
+	/*
+   IMU calculation parameters
+	*/
+	imu_state->q[0] =1.0f;
+	
+	/* IMU identification, check and calibration */
+	
+	uint8_t c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
+  if (SerialDebug) {
+		char *temp = NULL;
+		Sasprintf(temp, "MPU9250\nI AM %x  I should be %x", c, 0x71); 
+		uart_printf(temp);
+		free(temp);
+  }
+  delay_gen(200);
+  if (c == 0x71) // WHO_AM_I should always be 0x71
+  {
+    if (SerialDebug) {
+      uart_printf("MPU9250 is online, now self-testing\n");
+    }
+    MPU9250SelfTest(imu_state->SelfTest); // Start by performing self test and reporting values
+    if (SerialDebug) {
+			char *temp = NULL;
+			for(int i = 0; i< 6; i++)
+			{
+				Sasprintf(temp, "x-axis self test: acceleration trim within : %3.1f%% of factory value\n", imu_state->SelfTest[i]); 
+			}
+			uart_printf(temp);
+			free(temp);
+    }
+    delay_gen(500);
+    getAres(imu_state);
+    getGres(imu_state);
+    getMres(imu_state);
+    calibrateMPU9250(imu_state->gyroBias, imu_state->accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
+    if (SerialDebug) {
+			char *temp = NULL;
+			Sasprintf(temp, " MPU9250 calibrated and its bias\n x   y   z  \n %i %i %i mg\n%3.3f %3.3f %3.3fo/s\n", (int)(1000 * imu_state->accelBias[0]),(int)(1000 * imu_state->accelBias[1]),(int)(1000 * imu_state->accelBias[2]),imu_state->gyroBias[0],imu_state->gyroBias[1],imu_state->gyroBias[2]);
+			uart_printf(temp);
+			free(temp);
+    }
+    delay_gen(500);
+    initMPU9250(imu_state);
+    if (SerialDebug) {
+      uart_printf("MPU9250 initialized for active data mode....\n"); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
+    }
+    // Read the WHO_AM_I register of the magnetometer, this is a good test of communication
+    uint8_t d = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);  // Read WHO_AM_I register for AK8963
+    if (SerialDebug) {
+			char *temp = NULL;
+			Sasprintf(temp, "AK8963 \nI AM %x  I should be %x", d, 0x48); 
+			uart_printf(temp);
+			free(temp);
+    }
+    delay_gen(100);
+
+    // Get magnetometer calibration from AK8963 ROM
+    initAK8963(imu_state, imu_state->magCalibration);  if (SerialDebug) {
+     uart_printf("AK8963 initialized for active data mode....\n"); // Initialize device for active mode read of magnetometer
+    }
+    {
+      //magcalMPU9250(magBias, magScale);
+      float magbias[3] = {0, 0, 0};
+      magbias[0] = 54.;  // User environmental x-axis correction in milliGauss, should be automatically calculated
+      magbias[1] = 280.;  // User environmental x-axis correction in milliGauss
+      magbias[2] = -448.;  // User environmental x-axis correction in milliGauss
+			
+      imu_state->magBias[0] = (float) magbias[0] * imu_state->mRes * imu_state->magCalibration[0]; // save mag biases in G for main program
+      imu_state->magBias[1] = (float) magbias[1] * imu_state->mRes * imu_state->magCalibration[1];
+      imu_state->magBias[2] = (float) magbias[2] * imu_state->mRes * imu_state->magCalibration[2];
+
+      // Get soft iron correction estimate hardcoded now but it can be monitored and corrected when new soft iron is introduced.
+      imu_state->magScale[0] = 0.92;
+      imu_state->magScale[1] = 1.03;
+      imu_state->magScale[2] = 1.05;
+    }
+    if (SerialDebug) {
+			uart_printf("Calibration values: \n");
+			char *temp = NULL;
+			Sasprintf(temp, "X-Axis sensitivity adjustment value %3.2f\nY-Axis sensitivity adjustment value %3.2f\nZ-Axis sensitivity adjustment value %3.2f\n", imu_state->magCalibration[0], imu_state->magCalibration[1], imu_state->magCalibration[2]); 
+			uart_printf(temp);
+			free(temp);
+    }
+    delay_gen(500);
+  }
+  else
+  {
+    if (SerialDebug) {
+			char *temp = NULL;
+			Sasprintf(temp, "Could not connect to MPU9250: 0x%x", c); 
+			uart_printf(temp);
+			free(temp);
+    }
+    while (1) ; // Loop forever if communication doesn't happen
+  }
+	/* IMU identification, check and calibration */
+	
 }
 
 //hang on here, if applicaton can not proceed due to error
@@ -197,7 +422,7 @@ void assert_error(void)
 	while(1)
 	{
 	  led_toggle(GPIOD,LED_RED);
-		delay_gen();
+		delay_gen(800000);
 	}
 }
 
@@ -336,19 +561,50 @@ void app_rx_cmp_callback(void *size)
 	parse_cmd(rx_buffer);
 	
 }
+
+
 ////////////////////////////Main function//////////////////////////////////
 int main(void)
 {
 	uint32_t i=0;
 	uint8_t addrcmd[CMD_LENGTH];
 	uint8_t ack_buf[2];
-	
+	uint16_t ultrasonic_sensor_address[SENSORNUM] = {34, 24}; //secsor collections};//
+
 	uint32_t val;
+	/* operation variables */
+	ExperimentStatus expLoopStatus;
+	//declaring the ExperimentPayload
+	ExperimentPayload expPayload;
+	//declaring the ExperimentSetting
+	ExperimentSetting expSetting;
+	
+	/* operation variables */
+	/* IMU */
+	ImuState_t imu_state;
+	/* IMU */
+	/* Servo */
+	uint32_t mid_point = (expSetting.pwmLimit - expSetting.arm) / 2 + expSetting.arm; //TODO is it possible to put in the structure?
+	//int angular_speed = 0; //initial angular speed
+	//int limit = 132; // anticlockwise PWM upper speed limit for the ESC
+	//int arm = 53; //clockwise PWM starting point with highest speed
+	//int speed_offset = 20; // limit to 5 hz maximum
+	//int reading_time = 35; // waiting time for a reading in ms( milli seconds) 6.5 per metre
+	//const int readings = 72; // how many times reading in an angular speed 72 constant for 2 times of statistical basis.
+	//int waiting_time = 100 / expSetting.measurmentFrequency * expSetting.requiredSampleNumber; //overall time staying in an angular speed
+	States_t state;
+	state = NONE;
+	motorStates motorStatus = STOP;
+	/* Servo */
 	/* initialising and configures GPIOs for peripherals */
 
 	spi_gpio_init();
 	i2c_gpio_init();
 	uart_gpio_init();
+	/* pin init for servo and */
+	pin_init();
+	/* IMU init */
+	imu_init(&imu_state);
 	/* To use LED */
 	led_init();
 	
@@ -437,18 +693,18 @@ int main(void)
 /* First initilaize the Debug UART */
 	hal_debug_uart_init( DEBUG_USART_BAUD_9600);
 	
-	uart_printf("SPI master Application Running ... \n");
+	//uart_printf("SPI master Application Running ... \n");
 	/** set up ready and waiting for user input -- from I2C
 	TODO: Application will start in a condition this can be removed.
 	**/
-
+	uart_printf("set up finished\n");
 /* set up ready and waiting for user input */
 /* Wait for user Button press before starting the communication. Toggles LED_ORANGE until then */
   while(TestReady != SET)
   {
     led_toggle(GPIOD,LED_ORANGE);
 		//LED3 (orange)
-    delay_gen();
+    delay_gen(800000);
   }
 	
 	 led_turn_off(GPIOD,LED_ORANGE);
@@ -462,6 +718,19 @@ int main(void)
 
 while(1)
 {	
+	//Servo motor run
+	//TODO implement PWM servo driver
+	uint32_t requiredTime = expSetting.requiredSampleTime * 1000;
+  uint32_t experiment_time_loop = 0;
+  //uint32_t start_experiment_time =  millis();
+  //check pause or restart - timer needed
+  //for (int i = 0; i < SENSORNUM; i++) {
+    //expLoopStatus.waitingTime[i] = expLoopStatus.waitingDelay; //initialising timer of each module
+    //measurements[i].sensorID = i;
+  //}
+  
+  expLoopStatus.pwmSpeed += expSetting.rotationSpeedIncrement;
+	sampleIMU(&imu_state);
 	//for continous I2C and SPI
 	// asking mpu9520 with an interval and talk to spi if needed.
 	/* USART block */
@@ -489,7 +758,7 @@ while(1)
 	while(SpiHandle.State != HAL_SPI_STATE_READY );
 	
 	/* this dealy helps for the slave to be ready with the ACK bytes */
-	delay_gen();
+	delay_gen(800000);
 	
 	/* read back the ACK bytes from the slave */
 	hal_spi_master_rx(&SpiHandle,ack_buf, ACK_LEN);
@@ -514,7 +783,7 @@ while(1)
 	/* NOW send the data stream */
 	hal_spi_master_tx(&SpiHandle, master_write_data,DATA_LENGTH );
 	while(SpiHandle.State != HAL_SPI_STATE_READY );
-	delay_gen();
+	delay_gen(800000);
 
 //	read from slave
 
@@ -529,7 +798,7 @@ while(1)
 	while(SpiHandle.State != HAL_SPI_STATE_READY );
 	
 	/* this dealy helps for the slave to be ready with the ACK bytes */
-	delay_gen();
+	delay_gen(800000);
 	
 	/* read back the ACK bytes from the slave */
 	hal_spi_master_rx(&SpiHandle,ack_buf, ACK_LEN);
@@ -567,7 +836,7 @@ while(1)
 		uart_printf("Data Received from slave: %x\n",master_read_buffer[i]);
 	}
 			
-	delay_gen();
+	delay_gen(800000);
 	
 	/* I2C block - interval with a timmer and measure it*/
 	while(i2c_handle.State != HAL_I2C_STATE_READY);
@@ -613,7 +882,7 @@ while(1)
 	
 	//led_turn_on(GPIOD,LED_ORANGE);
 	//TODO: instead of delay make this work with a timer
-	//delay_gen();
+	//delay_gen(800000);
 	
 	/* Uart section  */
 	
@@ -677,4 +946,3 @@ void USARTx_IRQHandler(void)
 {
   hal_uart_handle_interrupt(&uart_handle);
 }
-

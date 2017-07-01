@@ -2,391 +2,291 @@
 #define IMU_DRIVER_H
 #include "imu.h"
 
+#include "../Drivers/uart_debug.h"
+#include "../Drivers/hal_i2c_driver.h"
+#include <stdio.h>
+#include <stdlib.h> //free
+#include <math.h>
 
-// Specify sensor full scale
-uint8_t Gscale = GFS_250DPS;
-uint8_t Ascale = AFS_2G;
-uint8_t Mscale = MFS_16BITS; // Choose either 14-bit or 16-bit magnetometer resolution
-uint8_t Mmode = 0x06;        // 2 for 8 Hz, 6 for 100 Hz continuous magnetometer data read
-float aRes, gRes, mRes;      // scale resolutions per LSB for the sensors
-
-// Pin definitions
-int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
-int adoPin = 8;
-int myLed = 13;
-
-int16_t accelCount[3];  // Stores the 16-bit signed accelerometer sensor output
-int16_t gyroCount[3];   // Stores the 16-bit signed gyro sensor output
-int16_t magCount[3];    // Stores the 16-bit signed magnetometer sensor output
-float magCalibration[3] = {0, 0, 0}, magBias[3] = {0, 0, 0}, magScale[3] = {0, 0, 0};  // Factory mag calibration and mag bias
-float gyroBias[3] = {0, 0, 0}, accelBias[3] = {0, 0, 0};      // Bias corrections for gyro and accelerometer
-int16_t tempCount;      // temperature raw count output
-float   temperature;    // Stores the real internal chip temperature in degrees Celsius
-float   SelfTest[6];    // holds results of gyro and accelerometer self test
-
-// global constants for 9 DoF fusion and AHRS (Attitude and Heading Reference System)
-float GyroMeasError = PI * (40.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
-float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
-// There is a tradeoff in the beta parameter between accuracy and response speed.
-// In the original Madgwick study, beta of 0.041 (corresponding to GyroMeasError of 2.7 degrees/s) was found to give optimal accuracy.
-// However, with this value, the LSM9SD0 response time is about 10 seconds to a stable initial quaternion.
-// Subsequent changes also require a longish lag time to a stable output, not fast enough for a quadcopter or robot car!
-// By increasing beta (GyroMeasError) by about a factor of fifteen, the response time constant is reduced to ~2 sec
-// I haven't noticed any reduction in solution accuracy. This is essentially the I coefficient in a PID control sense;
-// the bigger the feedback coefficient, the faster the solution converges, usually at the expense of accuracy.
-// In any case, this is the free parameter in the Madgwick filtering and fusion scheme.
-float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
-float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;   // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
+#define Sasprintf(write_to, ...) { \
+		char *tmp_string_for_extend = (write_to); \
+		asprintf(&(write_to), __VA_ARGS__); \
+		free(tmp_string_for_extend); \
+}
 #define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
 #define Ki 0.0f
 
-uint32_t delt_t = 0; // used to control display output rate
-uint32_t prevMeasure = 0, sumCount = 0; // used to control display output rate
-float pitch, yaw, roll;
-
-/*
-   time markers
-*/
-float deltat = 0.0f, sum = 0.0f;        // integration interval for both filter schemes
-uint32_t lastUpdate = 0, firstUpdate = 0; // used to calculate integration interval
-uint32_t Now = 0;        // used to calculate integration interval
-/*
-   IMU calculation parameters
-*/
-float ax, ay, az, gx, gy, gz, mx, my, mz; // variables to hold latest sensor data values
-float q[4] = {1.0f, 0.0f, 0.0f, 0.0f};    // vector to hold quaternion
-float eInt[3] = {0.0f, 0.0f, 0.0f};       // vector to hold integral error for Mahony method
-
-
 // current partial number
-int currentValue;
+//int currentValue;
 
-ExperimentStatus expLoopStatus;
-//declaring the ExperimentPayload
-ExperimentPayload expPayload;
-//declaring the ExperimentSetting
-ExperimentSetting expSetting;
+
 // current state-machine state
 
 //======Sensor and servo init start
-Servo myservo; //download the servo library and inspect how it works and use it in C code later
-const int esc_sig_pin = 3; // any pwm available pin (3, 6, 9, 11)
+/* change this with pwm code to drive a servo */
+//Servo myservo; //download the servo library and inspect how it works and use it in C code later
 const int ultrasonic_sensor_address[SENSORNUM] = {34, 24}; //secsor collections};//
-
-//int angular_speed = 0; //initial angular speed
-//int limit = 132; // anticlockwise PWM upper speed limit for the ESC
-//int arm = 53; //clockwise PWM starting point with highest speed
-unsigned int mid_point = (expSetting.pwmLimit - expSetting.arm) / 2 + expSetting.arm; //TODO is it possible to put in the structure?
-//int speed_offset = 20; // limit to 5 hz maximum
-//int reading_time = 35; // waiting time for a reading in ms( milli seconds) 6.5 per metre
-//const int readings = 72; // how many times reading in an angular speed 72 constant for 2 times of statistical basis.
-//int waiting_time = 100 / expSetting.measurmentFrequency * expSetting.requiredSampleNumber; //overall time staying in an angular speed
 //========Sensor and servo init end
 
 
-states state = NONE;
-motorStates motorStatus = STOP;
+//SensorData measurements[SENSORNUM];
+//void measure_cycle() {
 
-//Servo functions
-boolean start_sensor(byte bit8address) {
-  boolean errorlevel = 0;
-  byte bit7address;
-  bit7address = bit8address & B11111110;               //Do a bitwise 'and' operation to force the last bit to be zero -- we are writing to the address.
+//  //uart_printf(F("start loop"));uart_printf("  ");
+//  //uart_printf(expLoopStatus.waitingTime[i]); Serial.println("  waiting delay");
 
-  Wire.beginTransmission((int)bit7address);
-  Wire.write(0x51);           //Read a byte sub command start 81
-  errorlevel = Wire.endTransmission() | errorlevel;      //terminate the transmission
+//  for (int i = 0; i < SENSORNUM; i++) {
+//    if (expLoopStatus.triggered[i] == false) {
+//      //uart_printf(expLoopStatus.triggered[i]); Serial.println("sensor not triggered");
+//      //start the sensor[i]
+//      measurements[i].error = start_sensor(ultrasonic_sensor_address[i]);
+//      if (measurements[i].error == 0) {
+//        //uart_printf(measurements[i].error); Serial.println("  no error in measurement");
+//        expLoopStatus.triggered[i] = true;
+//        sampleIMUtoSensor( &measurements[i]); //taking timestamp 1 here with gyro
+//        //record the start time to a container
+//      } else { //sensor could not start jump to the next sensor
+//        //uart_printf(measurements[i].error); Serial.println("  sensor error skipping");
+//        continue;
+//      }
+//    } else { //triggered is true read the sensor after waiting time
+//      //uart_printf(expLoopStatus.triggered[i]); Serial.println("sensor  triggered");
+//      //time more than waitingTime[i] > elasped time in the loop
 
-  return errorlevel; //1 is good to communicate with sensor
-}
+//      if ( millis() - measurements[i].timeStamp > expLoopStatus.waitingTime[i]) {
+//        //uart_printf(millis()- measurements[i].timeStamp); Serial.println(" ms elasped");
+//        measurements[i].range = read_sensor(ultrasonic_sensor_address[i]);   //reading the sensor will return an integer value -- if this value is 0 there was an error
+//        expLoopStatus.recieved[i] = true;
+//        expLoopStatus.triggered[i] = false;
+//        //uart_printf("SID ");uart_printf(measurements[i].sensorID); uart_printf(" ");
+//        //uart_printf(measurements[i].range); Serial.println(" cm");
+//      }
+//    }
+//  }
+//  //Serial.println(F("middle loop"));
+//  for (int i = 0; i < SENSORNUM; i++) {
+//    if (expLoopStatus.recieved[i] == false) {
+//      return;
+//    } else {
+//      if ( 3 * measurements[i].prev_time_elasped - expLoopStatus.waitingTime[i] > 3 * expSetting.increment_waiting_time[i]) {
+//        //+
+//        expSetting.sinage[i] = 1;
+//      } else if (expLoopStatus.waitingTime[i] - 3 * measurements[i].prev_time_elasped > 3 * expSetting.increment_waiting_time[i]) {
+//        //-
+//        expSetting.sinage[i] = -1;
+//      }
+//      else {
+//        expSetting.sinage[i] = 0;
+//      }
+//      if (expLoopStatus.waitingTime[i] > 24) { //expLoopStatus.minimumDelay
+//        expLoopStatus.waitingTime[i] = expLoopStatus.waitingTime[i] + expSetting.sinage[i] * (int)expSetting.increment_waiting_time[i];
+//      }
 
-uint16_t read_sensor(byte bit8address) {
-  boolean errorlevel = 0;
-  uint16_t range = 0;
-  Wire.beginTransmission((int)bit8address);
-  Wire.write(byte(0x01)); // sub command
-  Wire.endTransmission();
-  int avail = Wire.requestFrom((uint8_t)bit8address, (uint8_t)2);
-  if (avail >= 2) {
-    range = ( Wire.read() << 8 ) +  Wire.read(); //TODO check if this reports the actual measurement or measuremnt more than 255
-    return range;
-  } else {
-    return (uint16_t)(0);
-  }
-}
+//      //if error in the recieved value
+//      if (measurements[i].range == 0 || measurements[i].range > 764 ) {
+//        //time of waiting adjustment based on the direction of increment and amount of increment.
+//        expLoopStatus.repeatedErrorCount[i]++;
+//        expLoopStatus.noErrorCount[i] = 0;
+//        uint32_t actualSensingTime = 3 * measurements[i].prev_time_elasped ;
+//        if (expLoopStatus.waitingTime[i] > actualSensingTime ) { //expLoopStatus.repeatedErrorCount[i] > 3&& expLoopStatus.waitingTime[i]>15 ) {
+//          expSetting.sinage[i] = -1;
+//        } else {
+//          expSetting.sinage[i] = 1;
+//        }
 
-SensorData measurements[SENSORNUM];
-void measure_cycle() {
+//        if (EXPDEBUG1) {
+//          uart_printf("actualSensingTime "); uart_printf( actualSensingTime); uart_printf(" ");
+//          uart_printf(expSetting.sinage[i]); uart_printf("  sinage\n");
+//          uart_printf(expSetting.increment_waiting_time[i]); uart_printf("  inc waiting time\n");
+//          uart_printf(expSetting.sinage[i] * (int)expSetting.increment_waiting_time[i]); uart_printf("  expSetting.sinage[i] * expSetting.increment_waiting_time[i]\n");
+//        }
+//        if (expLoopStatus.noErrorCount[i] > 8) {
+//          expLoopStatus.waitingTime[i] = expLoopStatus.waitingDelay;
+//        } else {
+//          expLoopStatus.waitingTime[i] = expLoopStatus.waitingTime[i] + expSetting.sinage[i] * (int)expSetting.increment_waiting_time[i];
+//        }
 
-  //Serial.print(F("start loop"));Serial.print("  ");
-  //Serial.print(expLoopStatus.waitingTime[i]); Serial.println("  waiting delay");
+//        if (EXPDEBUG1) {
+//          uart_printf("Error Sensor number "); uart_printf(measurements[i].sensorID); uart_printf(" ");
+//          uart_printf(expLoopStatus.waitingTime[i]); uart_printf("  waiting delay\n");
+//        }
+//      } else {
+//        expLoopStatus.noErrorCount[i]++;
+//        if (expLoopStatus.noErrorCount[i] > 3) {
+//          expLoopStatus.repeatedErrorCount[i] = 0;
+//        }
+//      }
 
-  for (int i = 0; i < SENSORNUM; i++) {
-    if (expLoopStatus.triggered[i] == false) {
-      //Serial.print(expLoopStatus.triggered[i]); Serial.println("sensor not triggered");
-      //start the sensor[i]
-      measurements[i].error = start_sensor(ultrasonic_sensor_address[i]);
-      if (measurements[i].error == 0) {
-        //Serial.print(measurements[i].error); Serial.println("  no error in measurement");
-        expLoopStatus.triggered[i] = true;
-        sampleIMUtoSensor( &measurements[i]); //taking timestamp 1 here with gyro
-        //record the start time to a container
-      } else { //sensor could not start jump to the next sensor
-        //Serial.print(measurements[i].error); Serial.println("  sensor error skipping");
-        continue;
-      }
-    } else { //triggered is true read the sensor after waiting time
-      //Serial.print(expLoopStatus.triggered[i]); Serial.println("sensor  triggered");
-      //time more than waitingTime[i] > elasped time in the loop
+//      float elsp_time = (float)measurements[i].range / expLoopStatus.sound_speed * 20.0f; //time1 ms - time2 ms (range / speed of sound in s *1000 s/ms )
+//      measurements[i].prev_time_elasped = (elsp_time == 0) ? measurements[i].prev_time_elasped : elsp_time;
+//      measurements[i].reflected_yaw = measurements[i].gyroValue.yaw; // (uint16_t)(sensorData->gyroValue.yaw + (float)(elsp_time * sensorData->gyroValue.zg)/1000000.0f * expSetting.coefficient_yaw);
 
-      if ( millis() - measurements[i].timeStamp > expLoopStatus.waitingTime[i]) {
-        //Serial.print(millis()- measurements[i].timeStamp); Serial.println(" ms elasped");
-        measurements[i].range = read_sensor(ultrasonic_sensor_address[i]);   //reading the sensor will return an integer value -- if this value is 0 there was an error
-        expLoopStatus.recieved[i] = true;
-        expLoopStatus.triggered[i] = false;
-        //Serial.print("SID ");Serial.print(measurements[i].sensorID); Serial.print(" ");
-        //Serial.print(measurements[i].range); Serial.println(" cm");
-      }
-    }
-  }
-  //Serial.println(F("middle loop"));
-  for (int i = 0; i < SENSORNUM; i++) {
-    if (expLoopStatus.recieved[i] == false) {
-      return;
-    } else {
-      if ( 3 * measurements[i].prev_time_elasped - expLoopStatus.waitingTime[i] > 3 * expSetting.increment_waiting_time[i]) {
-        //+
-        expSetting.sinage[i] = 1;
-      } else if (expLoopStatus.waitingTime[i] - 3 * measurements[i].prev_time_elasped > 3 * expSetting.increment_waiting_time[i]) {
-        //-
-        expSetting.sinage[i] = -1;
-      }
-      else {
-        expSetting.sinage[i] = 0;
-      }
-      if (expLoopStatus.waitingTime[i] > 24) { //expLoopStatus.minimumDelay
-        expLoopStatus.waitingTime[i] = expLoopStatus.waitingTime[i] + expSetting.sinage[i] * (int)expSetting.increment_waiting_time[i];
-      }
+//      if (EXPDEBUG1) {
+//        uart_printf(measurements[i].sensorID); uart_printf("  ");
+//        uart_printf(expLoopStatus.waitingTime[i]); uart_printf("  ");
+//        uart_printf(yaw); uart_printf("  ");
+//        uart_printf(pitch); uart_printf("  ");
+//        uart_printf(roll); uart_printf("  ");
+//        uart_printf(elsp_time); uart_printf("  ");
+//        uart_printf((uint32_t)(measurements[i].prev_time_elasped * 3.0f)); uart_printf("  ");
+//        Serial.println(measurements[i].range);
+//      }
+//      expLoopStatus.recieved[i] = false;
+//    }
+//  }
+//  //uart_printf(F("end loop\n"));
+//  return; //successful return after all the the
+//} //these are for multiple motors this time using uart not i2c iteration.
 
-      //if error in the recieved value
-      if (measurements[i].range == 0 || measurements[i].range > 764 ) {
-        //time of waiting adjustment based on the direction of increment and amount of increment.
-        expLoopStatus.repeatedErrorCount[i]++;
-        expLoopStatus.noErrorCount[i] = 0;
-        uint32_t actualSensingTime = 3 * measurements[i].prev_time_elasped ;
-        if (expLoopStatus.waitingTime[i] > actualSensingTime ) { //expLoopStatus.repeatedErrorCount[i] > 3&& expLoopStatus.waitingTime[i]>15 ) {
-          expSetting.sinage[i] = -1;
-        } else {
-          expSetting.sinage[i] = 1;
-        }
+//void setup ()
+//{
+//  //Servo and I2C set up
+//  /* pwm servo */ //myservo.attach(esc_sig_pin); //attaching the selected pwm pin
+//  //pin initialising
+//  
+//  uint8_t c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
+//  if (SerialDebug) {
+//    uart_printf("MPU9250 "); uart_printf("I AM "); uart_printf(c, HEX); uart_printf(" I should be "); Serial.println(0x71, HEX);
+//  }
+//  delay_gen(200);
+//  if (c == 0x71) // WHO_AM_I should always be 0x71
+//  {
+//    if (SerialDebug) {
+//      uart_printf("MPU9250 is online, now self-testing\n");
+//    }
+//    MPU9250SelfTest(SelfTest); // Start by performing self test and reporting values
+//    if (SerialDebug) {
+//      uart_printf("x-axis self test: acceleration trim within : "); uart_printf(SelfTest[0], 1); uart_printf("% of factory value\n");
+//      uart_printf("y-axis self test: acceleration trim within : "); uart_printf(SelfTest[1], 1); uart_printf("% of factory value\n");
+//      uart_printf("z-axis self test: acceleration trim within : "); uart_printf(SelfTest[2], 1); uart_printf("% of factory value\n");
+//      uart_printf("x-axis self test: gyration trim within : "); uart_printf(SelfTest[3], 1); uart_printf("% of factory value\n");
+//      uart_printf("y-axis self test: gyration trim within : "); uart_printf(SelfTest[4], 1); uart_printf("% of factory value\n");
+//      uart_printf("z-axis self test: gyration trim within : "); uart_printf(SelfTest[5], 1); uart_printf("% of factory value\n");
+//    }
+//    delay_gen(500);
+//    getAres();
+//    getGres();
+//    getMres();
+//    calibrateMPU9250(gyroBias, accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
+//    if (SerialDebug) {
+//      uart_printf(" MPU9250 calibrated and its bias\n");
+//      uart_printf(" x   y   z  \n");
+//      uart_printf(" ");
+//      uart_printf((int)(1000 * accelBias[0])); uart_printf(" ");
+//      uart_printf((int)(1000 * accelBias[1])); uart_printf(" ");
+//      uart_printf((int)(1000 * accelBias[2]));
+//      uart_printf("mg\n");
+//      uart_printf(gyroBias[0]); uart_printf(" ");
+//      uart_printf(gyroBias[1]); uart_printf(" ");
+//      uart_printf(gyroBias[2]);
+//      uart_printf("o/s\n");
+//    }
+//    delay_gen(500);
+//    initMPU9250();
+//    if (SerialDebug) {
+//      uart_printf("MPU9250 initialized for active data mode....\n"); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
+//    }
+//    // Read the WHO_AM_I register of the magnetometer, this is a good test of communication
+//    uint8_t d = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);  // Read WHO_AM_I register for AK8963
+//    if (SerialDebug) {
+//      uart_printf("AK8963 \n"); uart_printf("I AM "); uart_printf(d, HEX); uart_printf(" I should be "); uart_printf(0x48, HEX);
+//    }
+//    delay_gen(100);
 
-        if (EXPDEBUG1) {
-          Serial.print("actualSensingTime "); Serial.print( actualSensingTime); Serial.print(" ");
-          Serial.print(expSetting.sinage[i]); Serial.println("  sinage");
-          Serial.print(expSetting.increment_waiting_time[i]); Serial.println("  inc waiting time");
-          Serial.print(expSetting.sinage[i] * (int)expSetting.increment_waiting_time[i]); Serial.println("  expSetting.sinage[i] * expSetting.increment_waiting_time[i]");
-        }
-        if (expLoopStatus.noErrorCount[i] > 8) {
-          expLoopStatus.waitingTime[i] = expLoopStatus.waitingDelay;
-        } else {
-          expLoopStatus.waitingTime[i] = expLoopStatus.waitingTime[i] + expSetting.sinage[i] * (int)expSetting.increment_waiting_time[i];
-        }
+//    // Get magnetometer calibration from AK8963 ROM
+//    initAK8963(magCalibration);  if (SerialDebug) {
+//      uart_printf("AK8963 initialized for active data mode....\n"); // Initialize device for active mode read of magnetometer
+//    }
+//    {
+//      //magcalMPU9250(magBias, magScale);
+//      float magbias[3] = {0, 0, 0};
+//      magbias[0] = 54.;  // User environmental x-axis correction in milliGauss, should be automatically calculated
+//      magbias[1] = 280.;  // User environmental x-axis correction in milliGauss
+//      magbias[2] = -448.;  // User environmental x-axis correction in milliGauss
 
-        if (EXPDEBUG1) {
-          Serial.print("Error Sensor number "); Serial.print(measurements[i].sensorID); Serial.print(" ");
-          Serial.print(expLoopStatus.waitingTime[i]); Serial.println("  waiting delay");
-        }
-      } else {
-        expLoopStatus.noErrorCount[i]++;
-        if (expLoopStatus.noErrorCount[i] > 3) {
-          expLoopStatus.repeatedErrorCount[i] = 0;
-        }
-      }
+//      magBias[0] = (float) magbias[0] * mRes * magCalibration[0]; // save mag biases in G for main program
+//      magBias[1] = (float) magbias[1] * mRes * magCalibration[1];
+//      magBias[2] = (float) magbias[2] * mRes * magCalibration[2];
 
-      float elsp_time = (float)measurements[i].range / expLoopStatus.sound_speed * 20.0f; //time1 ms - time2 ms (range / speed of sound in s *1000 s/ms )
-      measurements[i].prev_time_elasped = (elsp_time == 0) ? measurements[i].prev_time_elasped : elsp_time;
-      measurements[i].reflected_yaw = measurements[i].gyroValue.yaw; // (uint16_t)(sensorData->gyroValue.yaw + (float)(elsp_time * sensorData->gyroValue.zg)/1000000.0f * expSetting.coefficient_yaw);
+//      // Get soft iron correction estimate hardcoded now but it can be monitored and corrected when new soft iron is introduced.
+//      magScale[0] = 0.92;
+//      magScale[1] = 1.03;
+//      magScale[2] = 1.05;
+//    }
+//    if (SerialDebug) {
+//      uart_printf("Calibration values: \n");
+//      uart_printf("X-Axis sensitivity adjustment value "); Serial.println(magCalibration[0], 2);
+//      uart_printf("Y-Axis sensitivity adjustment value "); Serial.println(magCalibration[1], 2);
+//      uart_printf("Z-Axis sensitivity adjustment value "); Serial.println(magCalibration[2], 2);
+//    }
+//    delay_gen(500);
+//  }
+//  else
+//  {
+//    if (SerialDebug) {
+//      uart_printf("Could not connect to MPU9250: 0x");
+//      Serial.println(c, HEX);
+//    }
+//    while (1) ; // Loop forever if communication doesn't happen
+//  }
+//  //initialising values in arrays with the first element of each array
+//  for (int i = 0; i < SENSORNUM; ++i) {
+//    expSetting.increment_waiting_time[i] = expSetting.increment_waiting_time[0];
+//  }
 
-      if (EXPDEBUG1) {
-        Serial.print(measurements[i].sensorID); Serial.print("  ");
-        Serial.print(expLoopStatus.waitingTime[i]); Serial.print("  ");
-        Serial.print(yaw); Serial.print("  ");
-        Serial.print(pitch); Serial.print("  ");
-        Serial.print(roll); Serial.print("  ");
-        Serial.print(elsp_time); Serial.print("  ");
-        Serial.print((uint32_t)(measurements[i].prev_time_elasped * 3.0f)); Serial.print("  ");
-        Serial.println(measurements[i].range);
-      }
-      expLoopStatus.recieved[i] = false;
-    }
-  }
-  //Serial.println(F("end loop"));
-  return; //successful return after all the the
-}
-
-void setup ()
-{
-  //Servo and I2C set up
-  myservo.attach(esc_sig_pin); //attaching the selected pwm pin
-  Wire.begin(); //Strarting the I2C communication
-  Serial.begin (115200); //optional in a release
-  //pin initialising
-  pinMode(intPin, INPUT);
-  digitalWrite(intPin, LOW);
-  pinMode(adoPin, OUTPUT);
-  digitalWrite(adoPin, HIGH);
-  pinMode(myLed, OUTPUT);
-  digitalWrite(myLed, HIGH);
-  byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
-  if (SerialDebug) {
-    Serial.print("MPU9250 "); Serial.print("I AM "); Serial.print(c, HEX); Serial.print(" I should be "); Serial.println(0x71, HEX);
-  }
-  delay(200);
-  if (c == 0x71) // WHO_AM_I should always be 0x71
-  {
-    if (SerialDebug) {
-      Serial.println("MPU9250 is online, now self-testing");
-    }
-    MPU9250SelfTest(SelfTest); // Start by performing self test and reporting values
-    if (SerialDebug) {
-      Serial.print("x-axis self test: acceleration trim within : "); Serial.print(SelfTest[0], 1); Serial.println("% of factory value");
-      Serial.print("y-axis self test: acceleration trim within : "); Serial.print(SelfTest[1], 1); Serial.println("% of factory value");
-      Serial.print("z-axis self test: acceleration trim within : "); Serial.print(SelfTest[2], 1); Serial.println("% of factory value");
-      Serial.print("x-axis self test: gyration trim within : "); Serial.print(SelfTest[3], 1); Serial.println("% of factory value");
-      Serial.print("y-axis self test: gyration trim within : "); Serial.print(SelfTest[4], 1); Serial.println("% of factory value");
-      Serial.print("z-axis self test: gyration trim within : "); Serial.print(SelfTest[5], 1); Serial.println("% of factory value");
-    }
-    delay(500);
-    getAres();
-    getGres();
-    getMres();
-    calibrateMPU9250(gyroBias, accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
-    if (SerialDebug) {
-      Serial.println(" MPU9250 calibrated and its bias");
-      Serial.println(" x   y   z  ");
-      Serial.print(" ");
-      Serial.print((int)(1000 * accelBias[0])); Serial.print(" ");
-      Serial.print((int)(1000 * accelBias[1])); Serial.print(" ");
-      Serial.print((int)(1000 * accelBias[2]));
-      Serial.println("mg");
-      Serial.print(gyroBias[0]); Serial.print(" ");
-      Serial.print(gyroBias[1]); Serial.print(" ");
-      Serial.print(gyroBias[2]);
-      Serial.println("o/s");
-    }
-    delay(500);
-    initMPU9250();
-    if (SerialDebug) {
-      Serial.println("MPU9250 initialized for active data mode...."); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
-    }
-    // Read the WHO_AM_I register of the magnetometer, this is a good test of communication
-    byte d = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);  // Read WHO_AM_I register for AK8963
-    if (SerialDebug) {
-      Serial.println("AK8963 "); Serial.print("I AM "); Serial.print(d, HEX); Serial.print(" I should be "); Serial.println(0x48, HEX);
-    }
-    delay(100);
-
-    // Get magnetometer calibration from AK8963 ROM
-    initAK8963(magCalibration);  if (SerialDebug) {
-      Serial.println("AK8963 initialized for active data mode...."); // Initialize device for active mode read of magnetometer
-    }
-    {
-      //magcalMPU9250(magBias, magScale);
-      float magbias[3] = {0, 0, 0};
-      magbias[0] = 54.;  // User environmental x-axis correction in milliGauss, should be automatically calculated
-      magbias[1] = 280.;  // User environmental x-axis correction in milliGauss
-      magbias[2] = -448.;  // User environmental x-axis correction in milliGauss
-
-      magBias[0] = (float) magbias[0] * mRes * magCalibration[0]; // save mag biases in G for main program
-      magBias[1] = (float) magbias[1] * mRes * magCalibration[1];
-      magBias[2] = (float) magbias[2] * mRes * magCalibration[2];
-
-      // Get soft iron correction estimate hardcoded now but it can be monitored and corrected when new soft iron is introduced.
-      magScale[0] = 0.92;
-      magScale[1] = 1.03;
-      magScale[2] = 1.05;
-    }
-    if (SerialDebug) {
-      Serial.println("Calibration values: ");
-      Serial.print("X-Axis sensitivity adjustment value "); Serial.println(magCalibration[0], 2);
-      Serial.print("Y-Axis sensitivity adjustment value "); Serial.println(magCalibration[1], 2);
-      Serial.print("Z-Axis sensitivity adjustment value "); Serial.println(magCalibration[2], 2);
-    }
-    delay(500);
-  }
-  else
-  {
-    if (SerialDebug) {
-      Serial.print("Could not connect to MPU9250: 0x");
-      Serial.println(c, HEX);
-    }
-    while (1) ; // Loop forever if communication doesn't happen
-  }
-  //initialising values in arrays with the first element of each array
-  for (int i = 0; i < SENSORNUM; ++i) {
-    expSetting.increment_waiting_time[i] = expSetting.increment_waiting_time[0];
-  }
-
-  Serial.println(F("set up finished"));
-}  // end of setup
+//  uart_printf("set up finished\n");
+//}  // end of setup
 void loop ()
 {
-  myservo.write(expLoopStatus.pwmSpeed);
-  uint32_t requiredTime = expSetting.requiredSampleTime * 1000;
-  uint32_t experiment_time_loop = 0;
-  uint32_t start_experiment_time =  millis();
-  //check pause or restart - timer needed
-  for (int i = 0; i < SENSORNUM; i++) {
-    expLoopStatus.waitingTime[i] = expLoopStatus.waitingDelay; //initialising timer of each module
-    measurements[i].sensorID = i;
-  }
+  /* pwm servo */ //myservo.write(expLoopStatus.pwmSpeed);
 
-  do {
-    sampleIMU(); //continous sampling of IMU data and perform linear filter.
-    measure_cycle(); //check if any timer over and measure and change the timer of sensor modules
-
-  } while (requiredTime > millis() - start_experiment_time);
-
-  expLoopStatus.pwmSpeed += expSetting.rotationSpeedIncrement;
 }  // end of loop
 //===================================================================================================================
 //====== Set of helper function to access acceleration. gyroscope, magnetometer, and temperature data
 //===================================================================================================================
-void sampleIMU() {
+
+void delay_gen(uint32_t cnt)
+{
+	//uint32_t cnt = 800000;
+	while(cnt--);
+}
+
+void sampleIMU(ImuState_t *imu_state) {
   if (readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01) {  // On interrupt from mpu9250, check if data ready interrupt
-    readAccelData(accelCount);  // Read the x/y/z adc values
+    readAccelData(imu_state->accelCount);  // Read the x/y/z adc values
 
     // Now we'll calculate the accleration value into actual g's
-    ax = (float)accelCount[0] * aRes;  //- accelBias[0]/2;  // get actual g value, this depends on scale being set
-    ay = (float)accelCount[1] * aRes;  //- accelBias[1]/2;
-    az = (float)accelCount[2] * aRes;  //- accelBias[2]/2;
+    imu_state->ax = (float)imu_state->accelCount[0] * imu_state->aRes;  //- accelBias[0]/2;  // get actual g value, this depends on scale being set
+    imu_state->ay = (float)imu_state->accelCount[1] * imu_state->aRes;  //- accelBias[1]/2;
+    imu_state->az = (float)imu_state->accelCount[2] * imu_state->aRes;  //- accelBias[2]/2;
 
-    readGyroData(gyroCount);  // Read the x/y/z adc values
+    readGyroData(imu_state->gyroCount);  // Read the x/y/z adc values
 
     // Calculate the gyro value into actual degrees per second
-    gx = (float)gyroCount[0] * gRes;  // - gyroBias[0]/2; // get actual gyro value, this depends on scale being set
-    gy = (float)gyroCount[1] * gRes;  // - gyroBias[1]/2;
-    gz = (float)gyroCount[2] * gRes;  // - gyroBias[2]/2;
+    imu_state->gx = (float)imu_state->gyroCount[0] * imu_state->gRes;  // - gyroBias[0]/2; // get actual gyro value, this depends on scale being set
+    imu_state->gy = (float)imu_state->gyroCount[1] * imu_state->gRes;  // - gyroBias[1]/2;
+    imu_state->gz = (float)imu_state->gyroCount[2] * imu_state->gRes;  // - gyroBias[2]/2;
 
-    readMagData(magCount);  // Read the x/y/z adc values
+    readMagData(imu_state->magCount);  // Read the x/y/z adc values
 
     // Calculate the magnetometer values in milliGauss
     // Include factory calibration per data sheet and user environmental corrections
-    mx = (float)magCount[0] * mRes * magCalibration[0] - magBias[0]; // get actual magnetometer value, this depends on scale being set
-    my = (float)magCount[1] * mRes * magCalibration[1] - magBias[1];
-    mz = (float)magCount[2] * mRes * magCalibration[2] - magBias[2];
+    imu_state->mx = (float)imu_state->magCount[0] * imu_state->mRes * imu_state->magCalibration[0] - imu_state->magBias[0]; // get actual magnetometer value, this depends on scale being set
+    imu_state->my = (float)imu_state->magCount[1] * imu_state->mRes * imu_state->magCalibration[1] - imu_state->magBias[1];
+    imu_state->mz = (float)imu_state->magCount[2] * imu_state->mRes * imu_state->magCalibration[2] - imu_state->magBias[2];
 
-    mx *= magScale[0];
-    my *= magScale[1];
-    mz *= magScale[2];
+    imu_state->mx *= imu_state->magScale[0];
+    imu_state->my *= imu_state->magScale[1];
+    imu_state->mz *= imu_state->magScale[2];
   }
 
-  Now = micros();
-  deltat = ((Now - lastUpdate) / 1000000.0f); // set integration time by time elapsed since last filter update
-  lastUpdate = Now;
+  imu_state->Now = micros();
+	//TODO: micro() from imer
+  imu_state->deltat = ((imu_state->Now - imu_state->lastUpdate) / 1000000.0f); // set integration time by time elapsed since last filter update
+  imu_state->lastUpdate = imu_state->Now;
 
-  sum += deltat; // sum for averaging filter update rate
-  sumCount++;
+  imu_state->sum += imu_state->deltat; // sum for averaging filter update rate
+  imu_state->sumCount++;
 
   // Sensors x (y)-axis of the accelerometer is aligned with the y (x)-axis of the magnetometer;
   // the magnetometer z-axis (+ down) is opposite to z-axis (+ up) of accelerometer and gyro!
@@ -396,64 +296,76 @@ void sampleIMU() {
   // This is ok by aircraft orientation standards!
   // Pass gyro rate as rad/s
   //MadgwickQuaternionUpdate(ax, ay, az, gx * PI / 180.0f, gy * PI / 180.0f, gz * PI / 180.0f,  my,  mx, mz);
-  MahonyQuaternionUpdate(ax, ay, az, gx * PI / 180.0f, gy * PI / 180.0f, gz * PI / 180.0f, my, mx, mz);
+  MahonyQuaternionUpdate(imu_state ,imu_state->ax, imu_state->ay, imu_state->az, imu_state->gx * PI / 180.0f, imu_state->gy * PI / 180.0f, imu_state->gz * PI / 180.0f, imu_state->my, imu_state->mx, imu_state->mz);
 
   return;
 }
 
-void sampleIMUtoSensor(SensorData * sensorData) {
+void sampleIMUtoSensor(ImuState_t *imu_state , SensorData * sensorData) {
 
   sensorData->timeStamp = millis();
-  sampleIMU();
+  sampleIMU(imu_state);
 
   if (!AHRS) { //if AHRS false
-    delt_t = millis() - prevMeasure;
-    if (delt_t > TIMEGAP) {
+    imu_state->delt_t = millis() - imu_state->prevMeasure;
+    if (imu_state->delt_t > TIMEGAP) {
 
       if (SerialDebug) {
+				char *temp = NULL;
+				Sasprintf(temp, "X-acceleration: %f2.3", 1000 * imu_state->ax); 
+
         // Print acceleration values in milligs!
-        Serial.print("X-acceleration: "); Serial.print(1000 * ax); Serial.print(" mg ");
-        Serial.print("Y-acceleration: "); Serial.print(1000 * ay); Serial.print(" mg ");
-        Serial.print("Z-acceleration: "); Serial.print(1000 * az); Serial.println(" mg ");
+        Sasprintf(temp,"X-acceleration:  %f2.3 mg ",1000 * imu_state->ax);
+        Sasprintf(temp,"Y-acceleration: %f2.3 mg ",1000 * imu_state->ay);
+        Sasprintf(temp,"Z-acceleration: %f2.3 mg \n",1000 * imu_state->az);
 
         // Print gyro values in degree/sec
-        Serial.print("X-gyro rate: "); Serial.print(gx); Serial.print(" degrees/sec ");
-        Serial.print("Y-gyro rate: "); Serial.print(gy); Serial.print(" degrees/sec ");
-        Serial.print("Z-gyro rate: "); Serial.print(gz); Serial.println(" degrees/sec");
+        Sasprintf(temp,"X-gyro rate: %f2.3 degrees/sec ",imu_state->gx);
+        Sasprintf(temp,"Y-gyro rate: %f2.3 degrees/sec ",imu_state->gy);
+        Sasprintf(temp,"Z-gyro rate: %f2.3 degrees/sec \n",imu_state->gz);
 
         // Print mag values in degree/sec
-        Serial.print("X-mag field: "); Serial.print(mx); Serial.print(" mG ");
-        Serial.print("Y-mag field: "); Serial.print(my); Serial.print(" mG ");
-        Serial.print("Z-mag field: "); Serial.print(mz); Serial.println(" mG");
-
-        tempCount = readTempData();  // Read the adc values
-        temperature = ((float) tempCount) / 333.87 + 21.0; // Temperature in degrees Centigrade TODO need to change it to the
-        sensorData->gyroValue.temperature = (uint16_t)(temperature);
+        Sasprintf(temp,"X-mag field: %f2.3 mG ",imu_state->mx);
+        Sasprintf(temp,"Y-mag field: %f2.3 mG ",imu_state->my);
+        Sasprintf(temp,"Z-mag field: %f2.3 mG \n",imu_state->mz);
+				
+				uart_printf(temp);
+				free(temp);
+				
+        imu_state->tempCount = readTempData();  // Read the adc values
+        imu_state->temperature = ((float) imu_state->tempCount) / 333.87 + 21.0; // Temperature in degrees Centigrade TODO need to change it to the
+        sensorData->gyroValue.temperature = (uint16_t)(imu_state->temperature);
         // Print temperature in degrees Centigrade
-        //Serial.print("Temperature is ");  Serial.print(temperature, 1);  Serial.println(" degrees C"); // Print T values to tenths of s degree C
+        //uart_printf("Temperature is ");  uart_printf(temperature, 1);  uart_printf(" degrees C\n"); // Print T values to tenths of s degree C
+
       }
-      prevMeasure = millis();
+      imu_state->prevMeasure = millis();
     }
   }
   else { //if AHRS true
     // Serial print and/or display at 0.5 s rate independent of data rates
-    delt_t = millis() - prevMeasure;
-    if (delt_t > TIMEGAP) { //independent report to serial
+    imu_state->delt_t = millis() - imu_state->prevMeasure;
+    if (imu_state->delt_t > TIMEGAP) { //independent report to serial
       if (SerialDebug) {
-        Serial.print("ax = "); Serial.print((int)1000 * ax);
-        Serial.print(" ay = "); Serial.print((int)1000 * ay);
-        Serial.print(" az = "); Serial.print((int)1000 * az); Serial.println(" mg");
-        Serial.print("gx = "); Serial.print( gx);
-        Serial.print(" gy = "); Serial.print( gy);
-        Serial.print(" gz = "); Serial.print( gz); Serial.println(" deg/s");
-        Serial.print("mx = "); Serial.print( (int)mx );
-        Serial.print(" my = "); Serial.print( (int)my );
-        Serial.print(" mz = "); Serial.print( (int)mz ); Serial.println(" mG");
+				char *temp = NULL;
+				
+        Sasprintf(temp,"ax = %f2.3",(int)1000 * imu_state->ax);
+        Sasprintf(temp," ay = %f2.3",(int)1000 * imu_state->ay);
+        Sasprintf(temp," az = %f2.3 mg\n",(int)1000 * imu_state->az);
+        Sasprintf(temp,"gx = %f2.3", imu_state->gx);
+        Sasprintf(temp," gy = %f2.3", imu_state->gy);
+        Sasprintf(temp," gz = %f2.3 deg/s\n", imu_state->gz);
+        Sasprintf(temp,"mx = %d", (int)imu_state->mx );
+        Sasprintf(temp," my = %d", (int)imu_state->my );
+        Sasprintf(temp," mz = %d mG\n", (int)imu_state->mz );
 
-        Serial.print("q0 = "); Serial.print(q[0]);
-        Serial.print(" qx = "); Serial.print(q[1]);
-        Serial.print(" qy = "); Serial.print(q[2]);
-        Serial.print(" qz = "); Serial.println(q[3]);
+        Sasprintf(temp,"q0 = %f2.3",imu_state->q[0]);
+        Sasprintf(temp," qx = %f2.3",imu_state->q[1]);
+        Sasprintf(temp," qy = %f2.3",imu_state->q[2]);
+        Sasprintf(temp," qz = %f2.3\n",imu_state->q[3]);
+				
+				uart_printf(temp);
+				free(temp);
       }
 
       // Define output variables from updated quaternion---these are Tait-Bryan angles, commonly used in aircraft orientation.
@@ -465,28 +377,25 @@ void sampleIMUtoSensor(SensorData * sensorData) {
       // Tait-Bryan angles as well as Euler angles are non-commutative; that is, the get the correct orientation the rotations must be
       // applied in the correct order which for this configuration is yaw, pitch, and then roll.
       // For more see http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles which has additional links.
-      yaw   = atan2(2.0f * (q[1] * q[2] + q[0] * q[3]), q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]);
-      pitch = -asin(2.0f * (q[1] * q[3] - q[0] * q[2]));
-      roll  = atan2(2.0f * (q[0] * q[1] + q[2] * q[3]), q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]);
-      pitch *= 180.0f / PI;
-      yaw   *= 180.0f / PI;
-      yaw   -= 10.9; // Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
-      roll  *= 180.0f / PI;
+      imu_state->yaw   = atan2(2.0f * (imu_state->q[1] * imu_state->q[2] + imu_state->q[0] * imu_state->q[3]), imu_state->q[0] * imu_state->q[0] + imu_state->q[1] * imu_state->q[1] - imu_state->q[2] * imu_state->q[2] - imu_state->q[3] * imu_state->q[3]);
+      imu_state->pitch = -asin(2.0f * (imu_state->q[1] * imu_state->q[3] - imu_state->q[0] * imu_state->q[2]));
+      imu_state->roll  = atan2(2.0f * (imu_state->q[0] * imu_state->q[1] + imu_state->q[2] * imu_state->q[3]), imu_state->q[0] * imu_state->q[0] - imu_state->q[1] * imu_state->q[1] - imu_state->q[2] * imu_state->q[2] + imu_state->q[3] * imu_state->q[3]);
+      imu_state->pitch *= 180.0f / PI;
+      imu_state->yaw   *= 180.0f / PI;
+      imu_state->yaw   -= 10.9; // Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
+      imu_state->roll  *= 180.0f / PI;
 
-      sensorData->gyroValue.yaw = (uint16_t)(yaw);
-      sensorData->gyroValue.pitch = (uint16_t)(pitch);
-      sensorData->gyroValue.roll = (uint16_t)(roll);
-      sensorData->gyroValue.freq = (float)(sumCount / sum);
+      sensorData->gyroValue.yaw = (uint16_t)(imu_state->yaw);
+      sensorData->gyroValue.pitch = (uint16_t)(imu_state->pitch);
+      sensorData->gyroValue.roll = (uint16_t)(imu_state->roll);
+      sensorData->gyroValue.freq = (float)(imu_state->sumCount / imu_state->sum);
 
       //printing all results
       if (SerialDebug) {
-        Serial.print("Yaw, Pitch, Roll: ");
-        Serial.print(yaw);
-        Serial.print(", ");
-        Serial.print(pitch);
-        Serial.print(", ");
-        Serial.println(roll);
-        Serial.print("rate = "); Serial.print((float)sumCount / sum); Serial.println(" Hz");
+				char *temp = NULL;
+				Sasprintf(temp, "Yaw, Pitch, Roll: %f2.3, %f2.3, %f2.3\nrate =  %f2.3Hz\n", imu_state->yaw, imu_state->pitch, imu_state->roll, (float)imu_state->sumCount / imu_state->sum); 
+				uart_printf(temp);
+				free(temp);				
       }
       // With these settings the filter is updating at a ~145 Hz rate using the Madgwick scheme and
       // >200 Hz using the Mahony scheme even though the display refreshes at only 2 Hz.
@@ -499,80 +408,81 @@ void sampleIMUtoSensor(SensorData * sensorData) {
       // stabilization control of a fast-moving robot or quadcopter. Compare to the update rate of 200 Hz
       // produced by the on-board Digital Motion Processor of Invensense's MPU6050 6 DoF and MPU9150 9DoF sensors.
       // The 3.3 V 8 MHz Pro Mini is doing pretty well!
-      digitalWrite(myLed, !digitalRead(myLed));
-      prevMeasure = millis();
-      sumCount = 0;
-      sum = 0;
+      //TODO: interrupt make to led light gpio
+			//led_toggle(GPIOD,LED_RED);
+      imu_state->prevMeasure = millis();
+      imu_state->sumCount = 0;
+      imu_state->sum = 0;
     }
   }
 
-  sensorData->gyroValue.xa = (uint16_t)(1000 * ax);
-  sensorData->gyroValue.ya = (uint16_t)(1000 * ay);
-  sensorData->gyroValue.za = (uint16_t)(1000 * az);
+  sensorData->gyroValue.xa = (uint16_t)(1000 * imu_state->ax);
+  sensorData->gyroValue.ya = (uint16_t)(1000 * imu_state->ay);
+  sensorData->gyroValue.za = (uint16_t)(1000 * imu_state->az);
 
-  sensorData->gyroValue.xg = (uint16_t)(gx);
-  sensorData->gyroValue.yg = (uint16_t)(gy);
-  sensorData->gyroValue.zg = (uint16_t)(gz);
+  sensorData->gyroValue.xg = (uint16_t)(imu_state->gx);
+  sensorData->gyroValue.yg = (uint16_t)(imu_state->gy);
+  sensorData->gyroValue.zg = (uint16_t)(imu_state->gz);
 
-  sensorData->gyroValue.xm = (uint16_t)(mx);
-  sensorData->gyroValue.ym = (uint16_t)(my);
-  sensorData->gyroValue.zm = (uint16_t)(mz);
+  sensorData->gyroValue.xm = (uint16_t)(imu_state->mx);
+  sensorData->gyroValue.ym = (uint16_t)(imu_state->my);
+  sensorData->gyroValue.zm = (uint16_t)(imu_state->mz);
 
   return ;
 }
 
-void getMres() {
-  switch (Mscale)
+void getMres(ImuState_t *imu_state) {
+  switch (imu_state->mscale)
   {
     // Possible magnetometer scales (and their register bit settings) are:
     // 14 bit resolution (0) and 16 bit resolution (1)
     case MFS_14BITS:
-      mRes = 10.*4912. / 8190.; // Proper scale to return milliGauss
+      imu_state->mRes = 10.*4912. / 8190.; // Proper scale to return milliGauss
       break;
     case MFS_16BITS:
-      mRes = 10.*4912. / 32760.0; // Proper scale to return milliGauss
+      imu_state->mRes = 10.*4912. / 32760.0; // Proper scale to return milliGauss
       break;
   }
 }
 
-void getGres() {
-  switch (Gscale)
+void getGres(ImuState_t *imu_state) {
+  switch (imu_state->gscale)
   {
     // Possible gyro scales (and their register bit settings) are:
     // 250 DPS (00), 500 DPS (01), 1000 DPS (10), and 2000 DPS  (11).
     // Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
     case GFS_250DPS:
-      gRes = 250.0 / 32768.0;
+      imu_state->gRes = 250.0 / 32768.0;
       break;
     case GFS_500DPS:
-      gRes = 500.0 / 32768.0;
+      imu_state->gRes = 500.0 / 32768.0;
       break;
     case GFS_1000DPS:
-      gRes = 1000.0 / 32768.0;
+      imu_state->gRes = 1000.0 / 32768.0;
       break;
     case GFS_2000DPS:
-      gRes = 2000.0 / 32768.0;
+      imu_state->gRes = 2000.0 / 32768.0;
       break;
   }
 }
 
-void getAres() {
-  switch (Ascale)
+void getAres(ImuState_t *imu_state) {
+  switch (imu_state->ascale)
   {
     // Possible accelerometer scales (and their register bit settings) are:
     // 2 Gs (00), 4 Gs (01), 8 Gs (10), and 16 Gs  (11).
     // Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
     case AFS_2G:
-      aRes = 2.0 / 32768.0;
+      imu_state->aRes = 2.0 / 32768.0;
       break;
     case AFS_4G:
-      aRes = 4.0 / 32768.0;
+      imu_state->aRes = 4.0 / 32768.0;
       break;
     case AFS_8G:
-      aRes = 8.0 / 32768.0;
+      imu_state->aRes = 8.0 / 32768.0;
       break;
     case AFS_16G:
-      aRes = 16.0 / 32768.0;
+      imu_state->aRes = 16.0 / 32768.0;
       break;
   }
 }
@@ -618,37 +528,37 @@ int16_t readTempData()
   return ((int16_t)rawData[0] << 8) | rawData[1] ;  // Turn the MSB and LSB into a 16-bit value
 }
 
-void initAK8963(float * destination)
+void initAK8963(ImuState_t *imu_state, float * destination)
 {
   // First extract the factory calibration for each magnetometer axis
   uint8_t rawData[3];  // x/y/z gyro calibration data stored here
   writeByte(AK8963_ADDRESS, AK8963_CNTL, 0x00); // Power down magnetometer
-  delay(10);
+  delay_gen(10);
   writeByte(AK8963_ADDRESS, AK8963_CNTL, 0x0F); // Enter Fuse ROM access mode
-  delay(10);
+  delay_gen(10);
   readBytes(AK8963_ADDRESS, AK8963_ASAX, 3, &rawData[0]);  // Read the x-, y-, and z-axis calibration values
   destination[0] =  (float)(rawData[0] - 128) / 256. + 1.; // Return x-axis sensitivity adjustment values, etc.
   destination[1] =  (float)(rawData[1] - 128) / 256. + 1.;
   destination[2] =  (float)(rawData[2] - 128) / 256. + 1.;
   writeByte(AK8963_ADDRESS, AK8963_CNTL, 0x00); // Power down magnetometer
-  delay(10);
+  delay_gen(10);
   // Configure the magnetometer for continuous read and highest resolution
   // set Mscale bit 4 to 1 (0) to enable 16 (14) bit resolution in CNTL register,
   // and enable continuous mode data acquisition Mmode (bits [3:0]), 0010 for 8 Hz and 0110 for 100 Hz sample rates
-  writeByte(AK8963_ADDRESS, AK8963_CNTL, Mscale << 4 | Mmode); // Set magnetometer data resolution and sample ODR
-  delay(10);
+  writeByte(AK8963_ADDRESS, AK8963_CNTL, imu_state->mscale << 4 | imu_state->mmode); // Set magnetometer data resolution and sample ODR
+  delay_gen(10);
 }
 
 
-void initMPU9250()
+void initMPU9250(ImuState_t *imu_state)
 {
   // wake up device
   writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x00); // Clear sleep mode bit (6), enable all sensors
-  delay(100); // Wait for all registers to reset
+  delay_gen(100); // Wait for all registers to reset
 
   // get stable time source
   writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x01);  // Auto select clock source to be PLL gyroscope reference if ready else
-  delay(200);
+  delay_gen(200);
 
   // Configure Gyro and Thermometer
   // Disable FSYNC and set thermometer and gyro bandwidth to 41 and 42 Hz, respectively;
@@ -668,7 +578,7 @@ void initMPU9250()
   // c = c & ~0xE0; // Clear self-test bits [7:5]
   c = c & ~0x02; // Clear Fchoice bits [1:0]
   c = c & ~0x18; // Clear AFS bits [4:3]
-  c = c | Gscale << 3; // Set full scale range for the gyro
+  c = c | imu_state->gscale << 3; // Set full scale range for the gyro
   // c =| 0x00; // Set Fchoice for the gyro to 11 by writing its inverse to bits 1:0 of GYRO_CONFIG
   writeByte(MPU9250_ADDRESS, GYRO_CONFIG, c ); // Write new GYRO_CONFIG value to register
 
@@ -676,7 +586,7 @@ void initMPU9250()
   c = readByte(MPU9250_ADDRESS, ACCEL_CONFIG); // get current ACCEL_CONFIG register value
   // c = c & ~0xE0; // Clear self-test bits [7:5]
   c = c & ~0x18;  // Clear AFS bits [4:3]
-  c = c | Ascale << 3; // Set full scale range for the accelerometer
+  c = c | imu_state->ascale << 3; // Set full scale range for the accelerometer
   writeByte(MPU9250_ADDRESS, ACCEL_CONFIG, c); // Write new ACCEL_CONFIG register value
 
   // Set accelerometer sample rate configuration
@@ -696,7 +606,7 @@ void initMPU9250()
   // can join the I2C bus and all can be controlled by the Arduino as master
   writeByte(MPU9250_ADDRESS, INT_PIN_CFG, 0x22);
   writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x01);  // Enable data ready (bit 0) interrupt
-  delay(100);
+  delay_gen(100);
 }
 
 // Function which accumulates gyro and accelerometer data after device initialization. It calculates the average
@@ -709,13 +619,13 @@ void calibrateMPU9250(float * dest1, float * dest2)
 
   // reset device
   writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x80); // Write a one to bit 7 reset bit; toggle reset device
-  delay(100);
+  delay_gen(100);
 
   // get stable time source; Auto select clock source to be PLL gyroscope reference if ready
   // else use the internal oscillator, bits 2:0 = 001
   writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x01);
   writeByte(MPU9250_ADDRESS, PWR_MGMT_2, 0x00);
-  delay(200);
+  delay_gen(200);
 
   // Configure device for bias calculation
   writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x00);   // Disable all interrupts
@@ -724,7 +634,7 @@ void calibrateMPU9250(float * dest1, float * dest2)
   writeByte(MPU9250_ADDRESS, I2C_MST_CTRL, 0x00); // Disable I2C master
   writeByte(MPU9250_ADDRESS, USER_CTRL, 0x00);    // Disable FIFO and I2C master modes
   writeByte(MPU9250_ADDRESS, USER_CTRL, 0x0C);    // Reset FIFO and DMP
-  delay(15);
+  delay_gen(15);
 
   // Configure MPU6050 gyro and accelerometer for bias calculation
   writeByte(MPU9250_ADDRESS, MPU9250CONFIG, 0x01);      // Set low-pass filter to 188 Hz
@@ -738,7 +648,7 @@ void calibrateMPU9250(float * dest1, float * dest2)
   // Configure FIFO to capture accelerometer and gyro data for bias calculation
   writeByte(MPU9250_ADDRESS, USER_CTRL, 0x40);   // Enable FIFO
   writeByte(MPU9250_ADDRESS, FIFO_EN, 0x78);     // Enable gyro and accelerometer sensors for FIFO  (max size 512 bytes in MPU-9150)
-  delay(40); // accumulate 40 samples in 40 milliseconds = 480 bytes
+  delay_gen(40); // accumulate 40 samples in 40 milliseconds = 480 bytes
 
   // At end of sample accumulation, turn off FIFO sensor read
   writeByte(MPU9250_ADDRESS, FIFO_EN, 0x00);        // Disable gyro and accelerometer sensors for FIFO
@@ -887,7 +797,7 @@ void MPU9250SelfTest(float * destination) // Should return percent deviation fro
   // Configure the accelerometer for self-test
   writeByte(MPU9250_ADDRESS, ACCEL_CONFIG, 0xE0); // Enable self test on all three axes and set accelerometer range to +/- 2 g
   writeByte(MPU9250_ADDRESS, GYRO_CONFIG,  0xE0); // Enable self test on all three axes and set gyro range to +/- 250 degrees/s
-  delay(25);  // Delay a while to let the device stabilize
+  delay_gen(25);  // Delay a while to let the device stabilize
 
   for ( int ii = 0; ii < 200; ii++) { // get average self-test values of gyro and acclerometer
 
@@ -910,7 +820,7 @@ void MPU9250SelfTest(float * destination) // Should return percent deviation fro
   // Configure the gyro and accelerometer for normal operation
   writeByte(MPU9250_ADDRESS, ACCEL_CONFIG, 0x00);
   writeByte(MPU9250_ADDRESS, GYRO_CONFIG,  0x00);
-  delay(25);  // Delay a while to let the device stabilize
+  delay_gen(25);  // Delay a while to let the device stabilize
 
   // Retrieve accelerometer and gyro factory Self-Test Code from USR_Reg
   selfTest[0] = readByte(MPU9250_ADDRESS, SELF_TEST_X_ACCEL); // X-axis accel self-test results
@@ -936,44 +846,44 @@ void MPU9250SelfTest(float * destination) // Should return percent deviation fro
   }
 }
 
-void magcalMPU9250(float * dest1, float * dest2)
+void magcalMPU9250(ImuState_t *imu_state, float * dest1, float * dest2)
 {
   uint16_t ii = 0, sample_count = 0;
   int32_t mag_bias[3] = {0, 0, 0}, mag_scale[3] = {0, 0, 0};
   int16_t mag_max[3] = { -32767, -32767, -32767}, mag_min[3] = {32767, 32767, 32767}, mag_temp[3] = {0, 0, 0};
 
-  Serial.println("Mag Calibration: Wave device in a figure eight until done!");
-  delay(1000);
+  uart_printf("Mag Calibration: Wave device in a figure eight until done!\n");
+  delay_gen(1000);
 
   // shoot for ~fifteen seconds of mag data
-  if (Mmode == 0x02) sample_count = 128; // at 8 Hz ODR, new mag data is available every 125 ms
-  if (Mmode == 0x06) sample_count = 1500; // at 100 Hz ODR, new mag data is available every 10 ms
+  if (imu_state->mmode == 0x02) sample_count = 128; // at 8 Hz ODR, new mag data is available every 125 ms
+  if (imu_state->mmode == 0x06) sample_count = 1500; // at 100 Hz ODR, new mag data is available every 10 ms
   for (ii = 0; ii < sample_count; ii++) {
     readMagData(mag_temp);  // Read the mag data
     for (int jj = 0; jj < 3; jj++) {
       if (mag_temp[jj] > mag_max[jj]) mag_max[jj] = mag_temp[jj];
       if (mag_temp[jj] < mag_min[jj]) mag_min[jj] = mag_temp[jj];
     }
-    if (Mmode == 0x02) delay(135); // at 8 Hz ODR, new mag data is available every 125 ms
-    if (Mmode == 0x06) delay(12); // at 100 Hz ODR, new mag data is available every 10 ms
+    if (imu_state->mmode == 0x02) delay_gen(135); // at 8 Hz ODR, new mag data is available every 125 ms
+    if (imu_state->mmode == 0x06) delay_gen(12); // at 100 Hz ODR, new mag data is available every 10 ms
   }
-  Serial.println("avg mag x   y   z:");
-  Serial.print(" "); Serial.print((mag_max[0] + mag_min[0] ) / 2); Serial.print(" "); Serial.print((mag_max[1] + mag_min[1] ) / 2);; Serial.print(" "); Serial.println((mag_max[2] + mag_min[2] ) / 2);
-
-  //    Serial.println("mag x min/max:"); Serial.println(mag_max[0]); Serial.println(mag_min[0]);
-  //    Serial.println("mag y min/max:"); Serial.println(mag_max[1]); Serial.println(mag_min[1]);
-  //    Serial.println("mag z min/max:"); Serial.println(mag_max[2]); Serial.println(mag_min[2]);
+	char *temp = NULL;
+	Sasprintf(temp, "avg mag x   y   z:\n %d %d %d\n", (mag_max[0] + mag_min[0] ) / 2,(mag_max[1] + mag_min[1] ) / 2,(mag_max[2] + mag_min[2] ) / 2); 
+	uart_printf(temp);
+	free(temp);
 
   // Get hard iron correction
   mag_bias[0]  = (mag_max[0] + mag_min[0]) / 2; // get average x mag bias in counts
   mag_bias[1]  = (mag_max[1] + mag_min[1]) / 2; // get average y mag bias in counts
   mag_bias[2]  = (mag_max[2] + mag_min[2]) / 2; // get average z mag bias in counts
 
-  dest1[0] = (float) mag_bias[0] * mRes * magCalibration[0]; // save mag biases in G for main program
-  dest1[1] = (float) mag_bias[1] * mRes * magCalibration[1];
-  dest1[2] = (float) mag_bias[2] * mRes * magCalibration[2];
-  Serial.println("avg magBias x   y   z:");
-  Serial.print(" "); Serial.print(dest1[0]); Serial.print(" "); Serial.print(dest1[1]);; Serial.print(" "); Serial.println(dest1[2]);
+  dest1[0] = (float) mag_bias[0] * imu_state->mRes * imu_state->magCalibration[0]; // save mag biases in G for main program
+  dest1[1] = (float) mag_bias[1] * imu_state->mRes * imu_state->magCalibration[1];
+  dest1[2] = (float) mag_bias[2] * imu_state->mRes * imu_state->magCalibration[2];
+	
+	Sasprintf(temp, "avg magBias x   y   z:\n %3.3f %3.3f %3.3f\n", dest1[0],dest1[1],dest1[2]); 
+	uart_printf(temp);
+	free(temp);
 
   // Get soft iron correction estimate
   mag_scale[0]  = (mag_max[0] - mag_min[0]) / 2; // get average x axis max chord length in counts
@@ -987,10 +897,12 @@ void magcalMPU9250(float * dest1, float * dest2)
   dest2[0] = avg_rad / ((float)mag_scale[0]);
   dest2[1] = avg_rad / ((float)mag_scale[1]);
   dest2[2] = avg_rad / ((float)mag_scale[2]);
-  Serial.println("avg magScale x   y   z:");
-  Serial.print(" "); Serial.print(dest2[0]); Serial.print(" "); Serial.print(dest2[1]);; Serial.print(" "); Serial.println(dest2[2]);
+	
+	Sasprintf(temp, "avg magScale x   y   z:\n %3.3f %3.3f %3.3f\n", dest2[0],dest2[1],dest2[2]); 
+	uart_printf(temp);
+	free(temp);
 
-  Serial.println("Mag Calibration done!");
+  uart_printf("Mag Calibration done!\n");
 }
 
 void writeByte(uint8_t address, uint8_t subAddress, uint8_t data)
@@ -1034,9 +946,9 @@ void readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * des
 // device orientation -- which can be converted to yaw, pitch, and roll. Useful for stabilizing quadcopters, etc.
 // The performance of the orientation filter is at least as good as conventional Kalman-based filtering algorithms
 // but is much less computationally intensive---it can be performed on a 3.3 V Pro Mini operating at 8 MHz!
-void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz)
+void MadgwickQuaternionUpdate(ImuState_t *imu_state, float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz)
 {
-  float q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3];   // short name local variable for readability
+  float q1 = imu_state->q[0], q2 = imu_state->q[1], q3 = imu_state->q[2], q4 = imu_state->q[3];   // short name local variable for readability
   float norm;
   float hx, hy, _2bx, _2bz;
   float s1, s2, s3, s4;
@@ -1107,22 +1019,22 @@ void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, 
   s4 *= norm;
 
   // Compute rate of change of quaternion
-  qDot1 = 0.5f * (-q2 * gx - q3 * gy - q4 * gz) - beta * s1;
-  qDot2 = 0.5f * (q1 * gx + q3 * gz - q4 * gy) - beta * s2;
-  qDot3 = 0.5f * (q1 * gy - q2 * gz + q4 * gx) - beta * s3;
-  qDot4 = 0.5f * (q1 * gz + q2 * gy - q3 * gx) - beta * s4;
+  qDot1 = 0.5f * (-q2 * gx - q3 * gy - q4 * gz) - imu_state->beta * s1;
+  qDot2 = 0.5f * (q1 * gx + q3 * gz - q4 * gy) - imu_state->beta * s2;
+  qDot3 = 0.5f * (q1 * gy - q2 * gz + q4 * gx) - imu_state->beta * s3;
+  qDot4 = 0.5f * (q1 * gz + q2 * gy - q3 * gx) - imu_state->beta * s4;
 
   // Integrate to yield quaternion
-  q1 += qDot1 * deltat;
-  q2 += qDot2 * deltat;
-  q3 += qDot3 * deltat;
-  q4 += qDot4 * deltat;
+  q1 += qDot1 * imu_state->deltat;
+  q2 += qDot2 * imu_state->deltat;
+  q3 += qDot3 * imu_state->deltat;
+  q4 += qDot4 * imu_state->deltat;
   norm = sqrtf(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4);    // normalise quaternion
   norm = 1.0f / norm;
-  q[0] = q1 * norm;
-  q[1] = q2 * norm;
-  q[2] = q3 * norm;
-  q[3] = q4 * norm;
+  imu_state->q[0] = q1 * norm;
+  imu_state->q[1] = q2 * norm;
+  imu_state->q[2] = q3 * norm;
+  imu_state->q[3] = q4 * norm;
 
 }
 
@@ -1130,9 +1042,9 @@ void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, 
 
 // Similar to Madgwick scheme but uses proportional and integral filtering on the error between estimated reference vectors and
 // measured ones.
-void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz)
+void MahonyQuaternionUpdate(ImuState_t *imu_state, float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz)
 {
-  float q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3];   // short name local variable for readability
+  float q1 = imu_state->q[0], q2 = imu_state->q[1], q3 = imu_state->q[2], q4 = imu_state->q[3];   // short name local variable for readability
   float norm;
   float hx, hy, bx, bz;
   float vx, vy, vz, wx, wy, wz;
@@ -1187,37 +1099,37 @@ void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy, fl
   ez = (ax * vy - ay * vx) + (mx * wy - my * wx);
   if (Ki > 0.0f)
   {
-    eInt[0] += ex;      // accumulate integral error
-    eInt[1] += ey;
-    eInt[2] += ez;
+    imu_state->eInt[0] += ex;      // accumulate integral error
+    imu_state->eInt[1] += ey;
+    imu_state->eInt[2] += ez;
   }
   else
   {
-    eInt[0] = 0.0f;     // prevent integral wind up
-    eInt[1] = 0.0f;
-    eInt[2] = 0.0f;
+    imu_state->eInt[0] = 0.0f;     // prevent integral wind up
+    imu_state->eInt[1] = 0.0f;
+    imu_state->eInt[2] = 0.0f;
   }
   // Apply feedback terms
-  gx = gx + Kp * ex + Ki * eInt[0];
-  gy = gy + Kp * ey + Ki * eInt[1];
-  gz = gz + Kp * ez + Ki * eInt[2];
+  gx = gx + Kp * ex + Ki * imu_state->eInt[0];
+  gy = gy + Kp * ey + Ki * imu_state->eInt[1];
+  gz = gz + Kp * ez + Ki * imu_state->eInt[2];
 
   // Integrate rate of change of quaternion
   pa = q2;
   pb = q3;
   pc = q4;
-  q1 = q1 + (-q2 * gx - q3 * gy - q4 * gz) * (0.5f * deltat);
-  q2 = pa + (q1 * gx + pb * gz - pc * gy) * (0.5f * deltat);
-  q3 = pb + (q1 * gy - pa * gz + pc * gx) * (0.5f * deltat);
-  q4 = pc + (q1 * gz + pa * gy - pb * gx) * (0.5f * deltat);
+  q1 = q1 + (-q2 * gx - q3 * gy - q4 * gz) * (0.5f * imu_state->deltat);
+  q2 = pa + (q1 * gx + pb * gz - pc * gy) * (0.5f * imu_state->deltat);
+  q3 = pb + (q1 * gy - pa * gz + pc * gx) * (0.5f * imu_state->deltat);
+  q4 = pc + (q1 * gz + pa * gy - pb * gx) * (0.5f * imu_state->deltat);
 
   // Normalise quaternion
   norm = sqrtf(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4);
   norm = 1.0f / norm;
-  q[0] = q1 * norm;
-  q[1] = q2 * norm;
-  q[2] = q3 * norm;
-  q[3] = q4 * norm;
+  imu_state->q[0] = q1 * norm;
+  imu_state->q[1] = q2 * norm;
+  imu_state->q[2] = q3 * norm;
+  imu_state->q[3] = q4 * norm;
 
 }
 

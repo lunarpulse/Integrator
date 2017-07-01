@@ -430,9 +430,24 @@
               <FilePath>.\Drivers\imu.c</FilePath>
             </File>
             <File>
+              <FileName>i2c_main.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\App\i2c_main.h</FilePath>
+            </File>
+            <File>
               <FileName>imu.h</FileName>
               <FileType>5</FileType>
               <FilePath>.\Drivers\imu.h</FilePath>
+            </File>
+            <File>
+              <FileName>servo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Drivers\servo.c</FilePath>
+            </File>
+            <File>
+              <FileName>servo.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Drivers\servo.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -575,11 +590,6 @@
               <FilePath>.\App\intergrator.c</FilePath>
             </File>
             <File>
-              <FileName>i2c_main.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\App\i2c_main.h</FilePath>
-            </File>
-            <File>
               <FileName>i2c_main.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\App\i2c_main.c</FilePath>
@@ -638,6 +648,11 @@
               <FileName>i2c_int_handler.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\App\i2c_int_handler.c</FilePath>
+            </File>
+            <File>
+              <FileName>i2c_main.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\App\i2c_main.h</FilePath>
             </File>
           </Files>
         </Group>
