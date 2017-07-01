@@ -1,3 +1,8 @@
+#ifndef IMU_DRIVER_H
+#define IMU_DRIVER_H
+#include "imu.h"
+
+
 // Specify sensor full scale
 uint8_t Gscale = GFS_250DPS;
 uint8_t Ascale = AFS_2G;
@@ -1215,3 +1220,5 @@ void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy, fl
   q[3] = q4 * norm;
 
 }
+
+#endif 

@@ -1,8 +1,12 @@
+#include "stm32f407xx.h"
+#include "../Drivers/hal_spi_driver.h"
+#include "../Drivers/hal_i2c_driver.h"
 
-#include <Servo.h>
-#include <SPI.h> //Call SPI library so you can communicate with the nRF24L01+
-#include <Wire.h>
-
+#define PACKSIZE 32
+#define SENSORNUM 2
+#define EXPDEBUG1 true
+#define SerialDebug false// set to true to get Serial output for debugging
+	
 //Magnetometer Registers
 #define AK8963_ADDRESS   0x0C
 #define WHO_AM_I_AK8963  0x00 // should return 0x48
@@ -24,17 +28,6 @@
 
 #define SELF_TEST_X_GYRO 0x00
 #define SELF_TEST_Y_GYRO 0x01
-#define SELF_TEST_Z_GYRO 0x02
-
-/*#define X_FINE_GAIN      0x03 // [7:0] fine gain
-  #define Y_FINE_GAIN      0x04
-  #define Z_FINE_GAIN      0x05
-  #define XA_OFFSET_H      0x06 // User-defined trim values for accelerometer
-  #define XA_OFFSET_L_TC   0x07
-  #define YA_OFFSET_H      0x08
-  #define YA_OFFSET_L_TC   0x09
-  #define ZA_OFFSET_H      0x0A
-  #define ZA_OFFSET_L_TC   0x0B */
 
 #define SELF_TEST_X_ACCEL 0x0D
 #define SELF_TEST_Y_ACCEL 0x0E
@@ -149,15 +142,14 @@
 #define ZA_OFFSET_H      0x7D
 #define ZA_OFFSET_L      0x7E
 
-// Using the MSENSR-9250 breakout board, ADO is set to 0
-// Seven-bit device address is 110100 for ADO = 0 and 110101 for ADO = 1
-//#define ADO 0
 #if ADO
 #define MPU9250_ADDRESS 0x69  // Device address when ADO = 1
 #else
 #define MPU9250_ADDRESS 0x68  // Device address when ADO = 0
 #define AK8963_ADDRESS 0x0C   //  Address of magnetometer
 #endif
+
+typedef enum { false, true } bool;
 
 #define AHRS true         // set to false for basic data read
 
@@ -166,26 +158,47 @@
 
 
 // structure to hold experimental sensor data from sensor nodes
-typedef struct { //total 32 byte of
-  word angularSpeed = 0x0000;  // 2 bytes (speed value : 2byte word 16bit pwm; number sample points wrod 0-63655| byte)
-  word msgLength = 0x0000;    // 1-14 data
+typedef struct
+{ //total 32 byte of
+  uint32_t angularSpeed;  // 2 bytes (speed value : 2byte uint32_t 16bit pwm; number sample points wrod 0-63655| byte)
+  uint32_t msgLength;    // 1-14 data
 
-  word data0 = 0x0000;    // 1 data points in words
-  word data1 = 0x0000;    // 1 data points in words
-  word data2 = 0x0000;    // 1 data points in words
-  word data3 = 0x0000;    // 1 data points in words
-  word data4 = 0x0000;    // 1 data points in words
-  word data5 = 0x0000;    // 1 data points in words
-  word data6 = 0x0000;    // 1 data points in words
-  word data7 = 0x0000;    // 1 data points in words
-  word data8 = 0x0000;    // 1 data points in words
-  word data9 = 0x0000;    // 1 data points in words
-  word data10 = 0x0000;   // 1 data points in words
-  word data11 = 0x0000;   // 1 data points in words
-  word data12 = 0x0000;   // 1 data points in words
-  word data13 = 0x0000;   // 1 data points in words
-  // total 1 to 13 words of data
+  uint32_t data0;    // 1 data points in uint32_t
+  uint32_t data1;    // 1 data points in uint32_t
+  uint32_t data2;    // 1 data points in uint32_t
+  uint32_t data3;    // 1 data points in uint32_t
+  uint32_t data4;    // 1 data points in uint32_t
+  uint32_t data5;    // 1 data points in uint32_t
+  uint32_t data6;    // 1 data points in uint32_t
+  uint32_t data7;    // 1 data points in uint32_t
+  uint32_t data8;    // 1 data points in uint32_t
+  uint32_t data9;    // 1 data points in uint32_t
+  uint32_t data10;   // 1 data points in uint32_t
+  uint32_t data11;   // 1 data points in uint32_t
+  uint32_t data12;   // 1 data points in uint32_t
+  uint32_t data13;   // 1 data points in uint32_t
+  // total 1 to 13 uint32_t of data
 } ExperimentPayload;
+
+// structure to hold experimental configuration data from users
+typedef struct 
+{
+  uint32_t numb_transmit_record;
+  uint32_t sensorNumber;//SENSORNUM;
+  uint32_t rotationSpeedIncrement;//1;   // I length of bootloader hex data (bytes)
+  uint32_t measurmentFrequency;//20; //F
+  uint32_t requiredSampleTime;//20; // required time each sampleing loop
+  uint32_t requiredSampleNumber;//18; //M
+  uint32_t rotationDirection;//1; //1 for clockwise 0 for anticlockwise;
+  uint32_t pauseTime;//1; //1 for clockwise 2 for anticlockwise;
+  uint32_t restartValue;//1; //1 for clockwise 2 for anticlockwise;
+  uint32_t speed_offset;//20;
+  uint32_t pwmLimit;//132;
+  uint32_t arm;//53;
+  float coefficient_yaw;//0.1;
+  uint32_t sinage[SENSORNUM];//{1};
+  uint32_t increment_waiting_time [SENSORNUM];//{2};
+} ExperimentSetting;
 
 // the possible states of the state-machine
 typedef enum {  NONE, GOT_N, GOT_D, GOT_I, GOT_S, GOT_M, GOT_F, GOT_R, GOT_P, GOT_U } states;
@@ -193,109 +206,91 @@ typedef enum {  NONE, GOT_N, GOT_D, GOT_I, GOT_S, GOT_M, GOT_F, GOT_R, GOT_P, GO
 //MOTOR status enums
 typedef enum {STOP, RESTART, RUN} motorStates; //how about CL, ACL ?
 
-// structure to hold experimental configuration data from users
-typedef struct {
-  uint8_t numb_transmit_record = 3;
-  unsigned int sensorNumber = SENSORNUM;
-  unsigned int rotationSpeedIncrement = 1;   // I length of bootloader hex data (bytes)
-  unsigned int measurmentFrequency = 20; //F
-  unsigned int requiredSampleTime = 20; // required time each sampleing loop
-  unsigned int requiredSampleNumber = 18; //M
-  unsigned int rotationDirection = 1; //1 for clockwise 0 for anticlockwise;
-  unsigned int pauseTime = 1; //1 for clockwise 2 for anticlockwise;
-  unsigned int restartValue = 1; //1 for clockwise 2 for anticlockwise;
-  unsigned int speed_offset = 20;
-  unsigned int pwmLimit = 132;
-  unsigned int arm = 53;
-  float coefficient_yaw = 0.1;
-  int sinage[SENSORNUM] = {1};
-  unsigned int increment_waiting_time [SENSORNUM] = {2};
-} ExperimentSetting;
 
 typedef struct {
-  unsigned int pwmSpeed = 90;   // I length of bootloader hex data (bytes)
-  unsigned int sampleCounter = 0; //when came out of the measurement loop then store the counter here and catch up from where left off
-  uint32_t waitingDelay = 30; //frequency delay between measuemrents
-  bool completeMeasurementLoop = false;
-  unsigned int prevRotation = 1;
-  float sound_speed = 340.29;
-  unsigned int repeatedErrorCount[SENSORNUM] = {0};
-  unsigned int noErrorCount[SENSORNUM] = {0};
-  uint32_t waitingTime[SENSORNUM] = {0};
-  bool triggered[SENSORNUM] = {false};
-  bool recieved[SENSORNUM] = {false};
+  uint32_t pwmSpeed;//90;   // I length of bootloader hex data (bytes)
+  uint32_t sampleCounter;//0; //when came out of the measurement loop then store the counter here and catch up from where left off
+  uint32_t waitingDelay;//30; //frequency delay between measuemrents
+  bool completeMeasurementLoop;//false;
+  uint32_t prevRotation;//1;
+  float sound_speed;//340.29;
+  uint32_t repeatedErrorCount[SENSORNUM];//{0};
+  uint32_t noErrorCount[SENSORNUM];//{0};
+  uint32_t waitingTime[SENSORNUM];//{0};
+  bool triggered[SENSORNUM];//{false};
+  bool recieved[SENSORNUM];//{false};
 } ExperimentStatus;
 
 typedef struct {
-  float xa = 0.0f; //accelerometer
-  float ya = 0.0f; //no need of typecast from double 0.0 to float or int 0 to float
-  float za = 0.0f; //no extra code by compilers.
-  float xg = 0.0f; //gyroscope
-  float yg = 0.0f;
-  float zg = 0.0f;
-  float xm = 0.0f; // magnetometor
-  float ym = 0.0f;
-  float zm = 0.0f;
-  float temperature = 0.0f;
-  float yaw = 0.0f;
-  float roll = 0.0f;
-  float pitch = 0.0f;
-  float freq = 0.0f;
+  float xa;//0.0f; //accelerometer
+  float ya;//0.0f; //no need of typecast from double 0.0 to float or int 0 to float
+  float za;//0.0f; //no extra code by compilers.
+  float xg;//0.0f; //gyroscope
+  float yg;//0.0f;
+  float zg;//0.0f;
+  float xm;//0.0f; // magnetometor
+  float ym;//0.0f;
+  float zm;//0.0f;
+  float temperature;//0.0f;
+  float yaw;//0.0f;
+  float roll;//0.0f;
+  float pitch;//0.0f;
+  float freq;//0.0f;
 } GyroValue;
 
 typedef struct {
-  int16_t xa = 0;
-  int16_t ya = 0;
-  int16_t za = 0;
-  int16_t xg = 0;
-  int16_t yg = 0;
-  int16_t zg = 0;
-  int16_t xm = 0;
-  int16_t ym = 0;
-  int16_t zm = 0;
-  int16_t yaw = 0;
-  int16_t pitch = 0;
-  int16_t roll = 0;
-  int16_t temperature = 0;
-  float freq = 0.0f;
+  int16_t xa;//0;
+  int16_t ya;//0;
+  int16_t za;//0;
+  int16_t xg;//0;
+  int16_t yg;//0;
+  int16_t zg;//0;
+  int16_t xm;//0;
+  int16_t ym;//0;
+  int16_t zm;//0;
+  int16_t yaw;//0;
+  int16_t pitch;//0;
+  int16_t roll;//0;
+  int16_t temperature;//0;
+  float freq;//0.0f;
 } GyroOutput;
 
-typedef struct {
-  uint8_t sensorID;
+typedef struct{
+  uint32_t sensorID;
   GyroValue gyroValue;
-  uint16_t range = 0;
-  bool error = false;
-  float prev_time_elasped = 0;
-  uint32_t timeStamp = 0;
-  int16_t reflected_yaw = 0;
-  int16_t reflected_pitch = 0;
-  int16_t reflected_roll = 0;
+  uint32_t range;//0;
+  bool error;//false;
+  float prev_time_elasped;//0;
+  uint32_t timeStamp;//0;
+  uint32_t reflected_yaw;//0;
+  uint32_t reflected_pitch;//0;
+  uint32_t reflected_roll;//0;
 } SensorData;
 
-typedef struct {
+typedef struct{
   GyroOutput gyroOut;
-  bool error = false;
-  uint32_t timeStampB = 0;
-  uint32_t timeStampE = 0;
+  bool error;//false;
+  uint32_t timeStampB;//0;
+  uint32_t timeStampE;//0;
 } GyroData;
 
 //mpu settings
 // Set initial input parameters
-enum Ascale {
-  AFS_2G = 0,
+typedef enum{
+  AFS_2G,
   AFS_4G,
   AFS_8G,
   AFS_16G
-};
+}Ascale;
 
-enum Gscale {
-  GFS_250DPS = 0,
+typedef enum{
+  GFS_250DPS,
   GFS_500DPS,
-  GFS_1000DPS,
+  GFS_1000DP,
   GFS_2000DPS
-};
+}Gscale;
 
-enum Mscale {
-  MFS_14BITS = 0, // 0.6 mG per LSB
-  MFS_16BITS      // 0.15 mG per LSB
-};
+typedef enum  {
+  MFS_14BITS,
+  MFS_16BITS
+}Mscale;
