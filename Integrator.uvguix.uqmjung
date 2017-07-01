@@ -1758,9 +1758,9 @@
       </Doc>
       <Doc>
         <Name>.\Drivers\imu.c</Name>
-        <ColumnNumber>1</ColumnNumber>
-        <TopLine>884</TopLine>
-        <CurrentLine>927</CurrentLine>
+        <ColumnNumber>40</ColumnNumber>
+        <TopLine>883</TopLine>
+        <CurrentLine>912</CurrentLine>
         <Folding>1</Folding>
         <ContractedFolders>501,510</ContractedFolders>
         <PaneID>0</PaneID>
@@ -1785,9 +1785,9 @@
       </Doc>
       <Doc>
         <Name>.\Drivers\imu.h</Name>
-        <ColumnNumber>0</ColumnNumber>
+        <ColumnNumber>48</ColumnNumber>
         <TopLine>231</TopLine>
-        <CurrentLine>240</CurrentLine>
+        <CurrentLine>248</CurrentLine>
         <Folding>1</Folding>
         <ContractedFolders></ContractedFolders>
         <PaneID>0</PaneID>
@@ -1816,9 +1816,9 @@
       </Doc>
       <Doc>
         <Name>.\App\i2c_main.c</Name>
-        <ColumnNumber>20</ColumnNumber>
+        <ColumnNumber>27</ColumnNumber>
         <TopLine>174</TopLine>
-        <CurrentLine>191</CurrentLine>
+        <CurrentLine>202</CurrentLine>
         <Folding>1</Folding>
         <ContractedFolders></ContractedFolders>
         <PaneID>0</PaneID>
