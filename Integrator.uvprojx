@@ -88,7 +88,7 @@
             <nStopA1X>0</nStopA1X>
             <nStopA2X>0</nStopA2X>
           </AfterMake>
-          <SelectedForBatchBuild>0</SelectedForBatchBuild>
+          <SelectedForBatchBuild>1</SelectedForBatchBuild>
           <SVCSIdString></SVCSIdString>
         </TargetCommonOption>
         <CommonProperty>
@@ -423,6 +423,16 @@
               <FileName>uart_debug.h</FileName>
               <FileType>5</FileType>
               <FilePath>.\Drivers\uart_debug.h</FilePath>
+            </File>
+            <File>
+              <FileName>imu.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Drivers\imu.c</FilePath>
+            </File>
+            <File>
+              <FileName>imu.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Drivers\imu.h</FilePath>
             </File>
           </Files>
         </Group>
