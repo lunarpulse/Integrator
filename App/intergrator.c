@@ -280,7 +280,7 @@ void delay_gen(uint32_t cnt)
 /**
 IMU init function
 **/
-void imu_init(ImuState_t *imu_state)
+void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 {
 	
 	imu_state->GyroMeasError = PI * (40.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
@@ -323,7 +323,7 @@ void imu_init(ImuState_t *imu_state)
 	
 	/* IMU identification, check and calibration */
 	
-	uint8_t c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
+	uint8_t c = readByte(handle, MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
   if (SerialDebug) {
 		char *temp = NULL;
 		Sasprintf(temp, "MPU9250\nI AM %x  I should be %x", c, 0x71); 
@@ -336,7 +336,7 @@ void imu_init(ImuState_t *imu_state)
     if (SerialDebug) {
       uart_printf("MPU9250 is online, now self-testing\n");
     }
-    MPU9250SelfTest(imu_state->SelfTest); // Start by performing self test and reporting values
+    MPU9250SelfTest(handle, imu_state->SelfTest); // Start by performing self test and reporting values
     if (SerialDebug) {
 			char *temp = NULL;
 			for(int i = 0; i< 6; i++)
@@ -350,7 +350,7 @@ void imu_init(ImuState_t *imu_state)
     getAres(imu_state);
     getGres(imu_state);
     getMres(imu_state);
-    calibrateMPU9250(imu_state->gyroBias, imu_state->accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
+    calibrateMPU9250(handle, imu_state->gyroBias, imu_state->accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
     if (SerialDebug) {
 			char *temp = NULL;
 			Sasprintf(temp, " MPU9250 calibrated and its bias\n x   y   z  \n %i %i %i mg\n%3.3f %3.3f %3.3fo/s\n", (int)(1000 * imu_state->accelBias[0]),(int)(1000 * imu_state->accelBias[1]),(int)(1000 * imu_state->accelBias[2]),imu_state->gyroBias[0],imu_state->gyroBias[1],imu_state->gyroBias[2]);
@@ -358,12 +358,12 @@ void imu_init(ImuState_t *imu_state)
 			free(temp);
     }
     delay_gen(500);
-    initMPU9250(imu_state);
+    initMPU9250(handle, imu_state);
     if (SerialDebug) {
       uart_printf("MPU9250 initialized for active data mode....\n"); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
     }
     // Read the WHO_AM_I register of the magnetometer, this is a good test of communication
-    uint8_t d = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);  // Read WHO_AM_I register for AK8963
+    uint8_t d = readByte(handle, AK8963_ADDRESS, WHO_AM_I_AK8963);  // Read WHO_AM_I register for AK8963
     if (SerialDebug) {
 			char *temp = NULL;
 			Sasprintf(temp, "AK8963 \nI AM %x  I should be %x", d, 0x48); 
@@ -373,7 +373,7 @@ void imu_init(ImuState_t *imu_state)
     delay_gen(100);
 
     // Get magnetometer calibration from AK8963 ROM
-    initAK8963(imu_state, imu_state->magCalibration);  if (SerialDebug) {
+    initAK8963(handle, imu_state, imu_state->magCalibration);  if (SerialDebug) {
      uart_printf("AK8963 initialized for active data mode....\n"); // Initialize device for active mode read of magnetometer
     }
     {
@@ -603,8 +603,7 @@ int main(void)
 	uart_gpio_init();
 	/* pin init for servo and */
 	pin_init();
-	/* IMU init */
-	imu_init(&imu_state);
+	
 	/* To use LED */
 	led_init();
 	
@@ -661,7 +660,9 @@ int main(void)
 	
 	//val = i2c_handle.Instance->CR1;
 	i2c_handle.State = HAL_I2C_STATE_READY;
+	/* IMU init */
 	
+	imu_init(&i2c_handle, &imu_state);
 	/* USART set up */
 	/*enable the clock for the USART2 Peripheral */
 	_HAL_RCC_USART2_CLK_ENABLE();   
@@ -730,7 +731,7 @@ while(1)
   //}
   
   expLoopStatus.pwmSpeed += expSetting.rotationSpeedIncrement;
-	sampleIMU(&imu_state);
+	sampleIMU(&i2c_handle, &imu_state);
 	//for continous I2C and SPI
 	// asking mpu9520 with an interval and talk to spi if needed.
 	/* USART block */

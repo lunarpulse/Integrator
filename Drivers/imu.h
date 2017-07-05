@@ -250,23 +250,23 @@ typedef	struct
 	
 	
 }ImuState_t;
-void sampleIMUtoSensor(ImuState_t *imu_state , SensorData * sensorData);
-void sampleIMU(ImuState_t *imu_state);
+void sampleIMUtoSensor(i2c_handle_t *handle, ImuState_t *imu_state , SensorData * sensorData);
+void sampleIMU(i2c_handle_t *handle, ImuState_t *imu_state);
 void getAres(ImuState_t *imu_state);
 void getGres(ImuState_t *imu_state);
 void getMres(ImuState_t *imu_state);
-void readAccelData(int16_t * destination);
-void readGyroData(int16_t * destination);
-void readMagData(int16_t * destination);
-int16_t readTempData();
-void initAK8963(ImuState_t *imu_state, float * destination);
-void initMPU9250(ImuState_t *imu_state);
-void calibrateMPU9250(float * dest1, float * dest2);
-void MPU9250SelfTest(float * destination);
-void magcalMPU9250(ImuState_t *imu_state, float * dest1, float * dest2);
-void writeByte(uint8_t address, uint8_t subAddress, uint8_t data);
-uint8_t readByte(uint8_t address, uint8_t subAddress);
-void readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest);
+void readAccelData(i2c_handle_t *handle, int16_t * destination);
+void readGyroData(i2c_handle_t *handle, int16_t * destination);
+void readMagData(i2c_handle_t *handle, int16_t * destination);
+int16_t readTempData(i2c_handle_t *handle);
+void initAK8963(i2c_handle_t *handle, ImuState_t *imu_state, float * destination);
+void initMPU9250(i2c_handle_t *handle, ImuState_t *imu_state);
+void calibrateMPU9250(i2c_handle_t *handle, float * dest1, float * dest2);
+void MPU9250SelfTest(i2c_handle_t *handle, float * destination);
+void magcalMPU9250(i2c_handle_t *handle, ImuState_t *imu_state, float * dest1, float * dest2);
+void writeByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress, uint8_t data);
+uint8_t readByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress);
+void readBytes(i2c_handle_t *handle, uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest);
 void MadgwickQuaternionUpdate(ImuState_t *imu_state, float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz);
 void MahonyQuaternionUpdate(ImuState_t *imu_state, float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz);
 
