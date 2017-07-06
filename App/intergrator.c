@@ -273,11 +273,11 @@ void pin_init(){
 
 /////////////////////////////////////other functions before main/////////////////////
 /* some delay generation */
-void delay_gen(uint32_t cnt)
-{
-	//uint32_t cnt = 800000;
-	while(cnt--);
-}
+//void delay_gen(uint32_t cnt)
+//{
+//	//uint32_t cnt = 800000;
+//	while(cnt--);
+//}
 /**
 IMU init function
 **/
@@ -331,7 +331,7 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 		uart_printf(temp);
 		free(temp);
   }
-  delay_gen(200);
+  delay(20);
   if (c == 0x71) // WHO_AM_I should always be 0x71
   {
     if (SerialDebug) {
@@ -347,7 +347,7 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 			uart_printf(temp);
 			free(temp);
     }
-    delay_gen(500);
+    delay(10);
     getAres(imu_state);
     getGres(imu_state);
     getMres(imu_state);
@@ -358,7 +358,7 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 			uart_printf(temp);
 			free(temp);
     }
-    delay_gen(500);
+    delay(10);
     initMPU9250(handle, imu_state);
     if (SerialDebug) {
       uart_printf("MPU9250 initialized for active data mode....\n"); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
@@ -371,7 +371,7 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 			uart_printf(temp);
 			free(temp);
     }
-    delay_gen(100);
+    delay(10);
 
     // Get magnetometer calibration from AK8963 ROM
     initAK8963(handle, imu_state, imu_state->magCalibration);  if (SerialDebug) {
@@ -400,7 +400,7 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 			uart_printf(temp);
 			free(temp);
     }
-    delay_gen(500);
+    delay(5);
   }
   else
   {
@@ -423,7 +423,7 @@ void assert_error(void)
 	while(1)
 	{
 	  led_toggle(GPIOD,LED_RED);
-		delay_gen(800000);
+		delay(5);
 	}
 }
 
@@ -597,8 +597,11 @@ int main(void)
 	state = NONE;
 	motorStates motorStatus = STOP;
 	/* Servo */
+	/* Clock init */
+	//SystemInit();
+	/* Clock init */
 	/* initialising and configures GPIOs for peripherals */
-
+	
 	spi_gpio_init();
 	i2c_gpio_init();
 	uart_gpio_init();
@@ -707,7 +710,7 @@ int main(void)
   {
     led_toggle(GPIOD,LED_ORANGE);
 		//LED3 (orange)
-    delay_gen(800000);
+    delay(5);
   }
 	
 	 led_turn_off(GPIOD,LED_ORANGE);
@@ -761,7 +764,7 @@ while(1)
 	while(SpiHandle.State != HAL_SPI_STATE_READY );
 	
 	/* this dealy helps for the slave to be ready with the ACK bytes */
-	delay_gen(800000);
+	delay(5);
 	
 	/* read back the ACK bytes from the slave */
 	hal_spi_master_rx(&SpiHandle,ack_buf, ACK_LEN);
@@ -786,7 +789,7 @@ while(1)
 	/* NOW send the data stream */
 	hal_spi_master_tx(&SpiHandle, master_write_data,DATA_LENGTH );
 	while(SpiHandle.State != HAL_SPI_STATE_READY );
-	delay_gen(800000);
+	delay(5);
 
 //	read from slave
 
@@ -801,7 +804,7 @@ while(1)
 	while(SpiHandle.State != HAL_SPI_STATE_READY );
 	
 	/* this dealy helps for the slave to be ready with the ACK bytes */
-	delay_gen(800000);
+	delay(5);
 	
 	/* read back the ACK bytes from the slave */
 	hal_spi_master_rx(&SpiHandle,ack_buf, ACK_LEN);
@@ -839,7 +842,7 @@ while(1)
 		uart_printf("Data Received from slave: %x\n",master_read_buffer[i]);
 	}
 			
-	delay_gen(800000);
+	delay(5);
 	
 	/* I2C block - interval with a timmer and measure it*/
 	while(i2c_handle.State != HAL_I2C_STATE_READY);
@@ -885,7 +888,7 @@ while(1)
 	
 	//led_turn_on(GPIOD,LED_ORANGE);
 	//TODO: instead of delay make this work with a timer
-	//delay_gen(800000);
+	//delay(5);
 	
 	/* Uart section  */
 	
@@ -954,4 +957,5 @@ void USARTx_IRQHandler(void)
 void SysTick_Handler(void)
 {
 		ticker++;
+		led_toggle(GPIOD,LED_ORANGE);
 }
