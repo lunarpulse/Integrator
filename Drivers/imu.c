@@ -1,9 +1,10 @@
-#ifndef IMU_DRIVER_H
-#define IMU_DRIVER_H
-#include "imu.h"
+#include "../Drivers/hal_millis.h"
+
+#include "../Drivers/imu.h"
 
 #include "../Drivers/uart_debug.h"
 #include "../Drivers/hal_i2c_driver.h"
+
 #include <stdio.h>
 #include <stdlib.h> //free
 #include <math.h>
@@ -280,7 +281,7 @@ void sampleIMU(i2c_handle_t *handle, ImuState_t *imu_state) {
     imu_state->mz *= imu_state->magScale[2];
   }
 
-  imu_state->Now = micros();
+  imu_state->Now = millis();
 	//TODO: micro() from imer
   imu_state->deltat = ((imu_state->Now - imu_state->lastUpdate) / 1000000.0f); // set integration time by time elapsed since last filter update
   imu_state->lastUpdate = imu_state->Now;
@@ -1161,5 +1162,3 @@ void MahonyQuaternionUpdate(ImuState_t *imu_state, float ax, float ay, float az,
   imu_state->q[3] = q4 * norm;
 
 }
-
-#endif 

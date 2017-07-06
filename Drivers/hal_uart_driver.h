@@ -223,4 +223,4 @@ void hal_uart_rx( uart_handle_t *handle,uint8_t *buffer, uint32_t len);
   */
 void hal_uart_handle_interrupt(uart_handle_t *huart);
 
-#endif 
+#endif

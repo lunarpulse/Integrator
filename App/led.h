@@ -46,4 +46,5 @@ void led_turn_off(GPIO_TypeDef *GPIOx, uint16_t pin);
 */
 void led_toggle(GPIO_TypeDef *GPIOx, uint16_t pin);
 
-#endif 
+#endif
+

@@ -1,5 +1,7 @@
+#ifndef IMU_DRIVER_H
+	#define IMU_DRIVER_H
+
 #include "stm32f407xx.h"
-#include "../Drivers/hal_spi_driver.h"
 #include "../Drivers/hal_i2c_driver.h"
 
 #define PACKSIZE 32
@@ -271,5 +273,7 @@ void MadgwickQuaternionUpdate(ImuState_t *imu_state, float ax, float ay, float a
 void MahonyQuaternionUpdate(ImuState_t *imu_state, float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz);
 
 
+
+#endif
 
 

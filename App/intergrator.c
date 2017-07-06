@@ -6,6 +6,7 @@
 #include "../Drivers/hal_uart_driver.h"
 #include "../Drivers/imu.h"
 #include "../Drivers/servo.h"
+#include "../Drivers/hal_millis.h"
 
 #include "../App/spi_main.h"
 #include "../App/uart_main.h"
@@ -698,6 +699,7 @@ int main(void)
 	/** set up ready and waiting for user input -- from I2C
 	TODO: Application will start in a condition this can be removed.
 	**/
+
 	uart_printf("set up finished\n");
 /* set up ready and waiting for user input */
 /* Wait for user Button press before starting the communication. Toggles LED_ORANGE until then */
@@ -946,4 +948,10 @@ void I2C1_EV_IRQHandler(void)
 void USARTx_IRQHandler(void)
 {
   hal_uart_handle_interrupt(&uart_handle);
+}
+
+/* SysTick Exception handler */
+void SysTick_Handler(void)
+{
+		ticker++;
 }

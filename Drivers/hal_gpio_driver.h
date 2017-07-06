@@ -156,4 +156,5 @@ void hal_gpio_enable_interrupt(uint16_t pin_no, IRQn_Type irq_no);
 void 	hal_gpio_clear_interrupt(uint16_t pin);
 
 
-#endif 
+#endif
+
