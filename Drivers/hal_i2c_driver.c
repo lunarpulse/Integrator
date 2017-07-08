@@ -276,8 +276,6 @@ void hal_i2c_master_tx(i2c_handle_t *handle, uint8_t slave_address, uint8_t *buf
 void hal_i2c_master_rx(i2c_handle_t *handle, uint8_t slave_addr, uint8_t *buffer, uint32_t len)
 {
 
-
-	
 	hal_i2c_enable_peripheral(handle->Instance);
 	
 	while(is_bus_busy(handle->Instance) );
