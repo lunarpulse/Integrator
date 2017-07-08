@@ -3,6 +3,7 @@
 #include "../Drivers/imu.h"
 
 #include "../Drivers/uart_debug.h"
+//#include "stm32f4xx_hal_i2c.h"
 #include "../Drivers/hal_i2c_driver.h"
 
 #include <stdio.h>
@@ -927,24 +928,39 @@ void writeByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress, uint8_
 
 uint8_t readByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress)
 {
-  uint8_t data[1] = {0}; // `data` will store the register data
+	//wait while busy bit is set
+	while(handle->Instance->SR2 & I2C_REG_SR2_BUS_BUSY_FLAG);
+	
+	//not busy now
+	//Set slave address
+	handle->Instance->SR1 |= (0x01 << 3);
+	
+  uint8_t data=0; // `data` will store the register data
 	uint8_t numData = 1;
+	
   //Wire.beginTransmission(address);         // Initialize the Tx buffer
   //Wire.write(subAddress);                  // Put slave register address in Tx buffer
-  hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&subAddress,1);
-	while(handle->State != HAL_I2C_STATE_READY){continue;};
+  hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&subAddress,(uint32_t)1);
+	while(handle->State != HAL_I2C_STATE_READY){
+	}
 	
-	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&numData,1);
-	while(handle->State != HAL_I2C_STATE_READY){continue;};
+	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&numData,(uint32_t)1);
+	while(handle->State != HAL_I2C_STATE_READY){
+	}
 	
-	hal_i2c_master_rx(handle, (uint8_t)address, data,1);
-	while(handle->State != HAL_I2C_STATE_READY){continue;};
+	hal_i2c_master_rx(handle, (uint8_t)address, (uint8_t*)&data,(uint32_t)1);
+	while(handle->State != HAL_I2C_STATE_READY){
+	}
+		
 	//Wire.endTransmission();        // Send the Tx buffer, but send a restart to keep connection alive
   //Wire.endTransmission(false);             // Send the Tx buffer, but send a restart to keep connection alive
   //  Wire.requestFrom(address, 1);  // Read one byte from slave register address
   //Wire.requestFrom(address, (size_t) 1);  // Read one byte from slave register address
   //data = Wire.read();                      // Fill Rx buffer with result
-  return *data;                             // Return data read from slave register
+	
+	
+	
+  return data;                             // Return data read from slave register
 }
 
 void readBytes(i2c_handle_t *handle, uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest)

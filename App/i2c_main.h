@@ -16,4 +16,4 @@
 
 #define ALT_FUN_4                       0x04
 #define GPIO_PIN_AF4_I2C123             ALT_FUN_4
-#endif 
+#endif

@@ -2,6 +2,8 @@
 	#define IMU_DRIVER_H
 
 #include "stm32f407xx.h"
+//#include "stm32f4xx_i2c.h"
+
 #include "../Drivers/hal_i2c_driver.h"
 
 #define PACKSIZE 32

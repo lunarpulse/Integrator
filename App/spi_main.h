@@ -38,4 +38,4 @@
 #define GPIO_PIN_AF5_SPI2   0x05
 
 
-#endif 
+#endif

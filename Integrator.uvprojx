@@ -335,7 +335,7 @@
               <MiscControls></MiscControls>
               <Define></Define>
               <Undefine></Undefine>
-              <IncludePath></IncludePath>
+              <IncludePath>.\lib;.\inc;.\Drivers;.\App;.\STM32F4xx_HAL_Driver\Inc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -448,6 +448,16 @@
               <FileName>servo.h</FileName>
               <FileType>5</FileType>
               <FilePath>.\Drivers\servo.h</FilePath>
+            </File>
+            <File>
+              <FileName>hal_millis.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Drivers\hal_millis.c</FilePath>
+            </File>
+            <File>
+              <FileName>hal_millis.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Drivers\hal_millis.h</FilePath>
             </File>
           </Files>
         </Group>

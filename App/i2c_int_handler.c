@@ -1,9 +1,8 @@
 #include<stdint.h>
 //#include "stm32f4xx_hal.h"
-#include "../inc/stm32f4xx_hal_i2c.h"
-#include "../Drivers/hal_i2c_driver.h"
-#include "../App/led.h"
-
+#include "hal_i2c_driver.h"
+#include "led.h"
+#include "stm32f4xx_hal_i2c.h"
 
 /**
   * @brief  Handle TXE flag for Master
@@ -219,10 +218,11 @@ static void I2C_MasterReceive_BTF(i2c_handle_t *hi2c)
   */
 static void I2C_Slave_ADDR(i2c_handle_t *hi2c)
 {
-	uint32_t tmpreg;
+	uint32_t tmpreg = 0x00U;
   /* Clear ADDR flag */
     tmpreg = hi2c->Instance->SR1;  //read SR1     
     tmpreg = hi2c->Instance->SR2;  //read SR2
+	UNUSED(tmpreg);
 }
 
 void hal_clear_stop_flag(i2c_handle_t *hi2c)

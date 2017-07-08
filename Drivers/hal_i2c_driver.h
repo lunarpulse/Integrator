@@ -100,6 +100,21 @@
 #define I2C_FM_DUTY_16BY9                  1
 #define I2C_FM_DUTY_2                      0
 
+#define HAL_I2C_ERROR_NONE       0x00000000U    /*!< No error           */
+#define HAL_I2C_ERROR_BERR       0x00000001U    /*!< BERR error         */
+#define HAL_I2C_ERROR_ARLO       0x00000002U    /*!< ARLO error         */
+#define HAL_I2C_ERROR_AF         0x00000004U    /*!< AF error           */
+#define HAL_I2C_ERROR_OVR        0x00000008U    /*!< OVR error          */
+#define HAL_I2C_ERROR_DMA        0x00000010U    /*!< DMA transfer error */
+#define HAL_I2C_ERROR_TIMEOUT    0x00000020U    /*!< Timeout Error      */
+
+#define __HAL_I2C_CLEAR_ADDRFLAG(__HANDLE__)    \
+  do{                                           \
+    __IO uint32_t tmpreg = 0x00U;               \
+    tmpreg = (__HANDLE__)->Instance->SR1;       \
+    tmpreg = (__HANDLE__)->Instance->SR2;       \
+    UNUSED(tmpreg);                             \
+  } while(0)
 /******************************************************************************/
 /*                                                                            */
 /*                      Data Structures used by I2C Driver                    */

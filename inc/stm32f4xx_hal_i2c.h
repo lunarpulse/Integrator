@@ -73,13 +73,13 @@
   * @brief    I2C Error Code 
   * @{
   */ 
-#define HAL_I2C_ERROR_NONE       ((uint32_t)0x00000000)    /*!< No error           */
-#define HAL_I2C_ERROR_BERR       ((uint32_t)0x00000001)    /*!< BERR error         */
-#define HAL_I2C_ERROR_ARLO       ((uint32_t)0x00000002)    /*!< ARLO error         */
-#define HAL_I2C_ERROR_AF         ((uint32_t)0x00000004)    /*!< AF error           */
-#define HAL_I2C_ERROR_OVR        ((uint32_t)0x00000008)    /*!< OVR error          */
-#define HAL_I2C_ERROR_DMA        ((uint32_t)0x00000010)    /*!< DMA transfer error */
-#define HAL_I2C_ERROR_TIMEOUT    ((uint32_t)0x00000020)    /*!< Timeout Error      */
+//#define HAL_I2C_ERROR_NONE       ((uint32_t)0x00000000)    /*!< No error           */
+//#define HAL_I2C_ERROR_BERR       ((uint32_t)0x00000001)    /*!< BERR error         */
+//#define HAL_I2C_ERROR_ARLO       ((uint32_t)0x00000002)    /*!< ARLO error         */
+//#define HAL_I2C_ERROR_AF         ((uint32_t)0x00000004)    /*!< AF error           */
+//#define HAL_I2C_ERROR_OVR        ((uint32_t)0x00000008)    /*!< OVR error          */
+//#define HAL_I2C_ERROR_DMA        ((uint32_t)0x00000010)    /*!< DMA transfer error */
+//#define HAL_I2C_ERROR_TIMEOUT    ((uint32_t)0x00000020)    /*!< Timeout Error      */
 /**
   * @}
   */

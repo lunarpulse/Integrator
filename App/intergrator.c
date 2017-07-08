@@ -324,15 +324,27 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 	
 	/* IMU identification, check and calibration */
 	
-	uint8_t c = readByte(handle, MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
+	uint8_t c[4];
+	//initAK8963(handle, imu_state, imu_state->magCalibration);
+	
+	
+	
+	initMPU9250(handle, imu_state);
+	delay(5);
+	calibrateMPU9250(handle, imu_state->gyroBias, imu_state->accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
+	delay(5);
+	delay(5);
+	MPU9250SelfTest(handle, imu_state->SelfTest);
+  delay(5);
+  readBytes(handle, MPU9250_ADDRESS, WHO_AM_I_MPU9250<<0x01, 4, c);  // Read WHO_AM_I register for MPU-9250
   if (SerialDebug) {
 		char *temp = NULL;
-		Sasprintf(temp, "MPU9250\nI AM %x  I should be %x", c, 0x71); 
+		Sasprintf(temp, "MPU9250\nI AM %x  I should be %x", *c, 0x71); 
 		uart_printf(temp);
 		free(temp);
   }
   delay(20);
-  if (c == 0x71) // WHO_AM_I should always be 0x71
+  if (*c == 0x71) // WHO_AM_I should always be 0x71
   {
     if (SerialDebug) {
       uart_printf("MPU9250 is online, now self-testing\n");
@@ -374,7 +386,8 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
     delay(10);
 
     // Get magnetometer calibration from AK8963 ROM
-    initAK8963(handle, imu_state, imu_state->magCalibration);  if (SerialDebug) {
+    initAK8963(handle, imu_state, imu_state->magCalibration);
+		if (SerialDebug) {
      uart_printf("AK8963 initialized for active data mode....\n"); // Initialize device for active mode read of magnetometer
     }
     {
@@ -406,7 +419,7 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
   {
     if (SerialDebug) {
 			char *temp = NULL;
-			Sasprintf(temp, "Could not connect to MPU9250: 0x%x", c); 
+			Sasprintf(temp, "Could not connect to MPU9250: 0x%x", *c); 
 			uart_printf(temp);
 			free(temp);
     }

@@ -70,7 +70,7 @@ void hal_i2c_rise_time_configuration(I2C_TypeDef *i2cx,uint32_t freqrange, uint3
 {
 	  /*---------------------------- I2Cx TRISE Configuration --------------------*/
   /* Configure I2Cx: Rise Time */
-//  hi2c->Instance->TRISE = I2C_RISE_TIME(freqrange, hi2c->Init.ClockSpeed);
+//  handle->Instance->TRISE = I2C_RISE_TIME(freqrange, handle->Init.ClockSpeed);
 	
 	uint32_t trise;
 	if( ClockSpeed <= 100000)
@@ -189,6 +189,28 @@ uint8_t i2c_wait_untill_sb_set(I2C_TypeDef *i2cx)
 }
 
 
+uint8_t i2c_wait_untill_btf_set(I2C_TypeDef *i2cx)
+{
+	//EV6: ADDR=1, cleared by reading SR1 register followed by reading SR2.
+	
+	if (i2cx->SR1 & I2C_REG_SR1_BTF_FLAG )
+	{
+		return 1 ;
+	}
+	return 0;
+}
+
+uint8_t i2c_wait_untill_rxne_set(I2C_TypeDef *i2cx)
+{
+	//EV6: ADDR=1, cleared by reading SR1 register followed by reading SR2.
+	
+	if (i2cx->SR1 & I2C_REG_SR1_RXNE_FLAG )
+	{
+		return 1 ;
+	}
+	return 0;
+}
+
 uint8_t i2c_wait_untill_addr_set(I2C_TypeDef *i2cx)
 {
 	//EV6: ADDR=1, cleared by reading SR1 register followed by reading SR2.
@@ -222,11 +244,11 @@ void hal_i2c_send_addr_first(I2C_TypeDef *i2cx, uint8_t address)
 
 void clear_addr_flag(I2C_TypeDef *i2cx)
 {
-	uint16_t val;
+	volatile uint16_t val = 0x00U;
 	
 	val = i2cx->SR1;
 	val = i2cx->SR2;
-	
+	UNUSED(val);
 }
 
 
@@ -241,7 +263,7 @@ void hal_i2c_master_tx(i2c_handle_t *handle, uint8_t slave_address, uint8_t *buf
 	
 	
 	 /* Disable Pos */
-    handle->Instance->CR1 &= ~I2C_CR1_POS;
+  handle->Instance->CR1 &= ~I2C_CR1_POS;
 
 	handle->State = HAL_I2C_STATE_BUSY_TX;
 	
@@ -270,12 +292,9 @@ void hal_i2c_master_tx(i2c_handle_t *handle, uint8_t slave_address, uint8_t *buf
 	hal_i2c_configure_tx_rx_interrupt(handle->Instance,1);
 	hal_i2c_configure_error_interrupt(handle->Instance,1);
 	hal_i2c_configure_evt_interrupt(handle->Instance,1);
-	
-	
 }
 void hal_i2c_master_rx(i2c_handle_t *handle, uint8_t slave_addr, uint8_t *buffer, uint32_t len)
 {
-
 	hal_i2c_enable_peripheral(handle->Instance);
 	
 	while(is_bus_busy(handle->Instance) );
@@ -310,6 +329,7 @@ void hal_i2c_master_rx(i2c_handle_t *handle, uint8_t slave_addr, uint8_t *buffer
 	hal_i2c_configure_tx_rx_interrupt(handle->Instance,1);
 	hal_i2c_configure_error_interrupt(handle->Instance,1);
 	hal_i2c_configure_evt_interrupt(handle->Instance,1);
+	
 }
 
 void hal_i2c_slave_tx(i2c_handle_t *handle, uint8_t *buffer, uint32_t len)
@@ -362,7 +382,7 @@ void hal_i2c_slave_rx(i2c_handle_t *handle, uint8_t *buffer, uint32_t len)
 #if 0
 	val = handle->Instance->CR2;
 	val = handle->Instance->CR1;
-		val = handle->Instance->OAR1;
+	val = handle->Instance->OAR1;
 #endif 
 }
 
