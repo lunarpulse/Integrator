@@ -62,14 +62,14 @@ uint8_t master_read_buffer[4];
 #define I2C_MASTER_MODE_EN //master mode on if this line is active
 
 //TODO: need to substiitute the address of slave for mpu9520
-#define SLAVE_OWN_ADDRESS      (uint8_t)0x53;
-#define SLAVE_ADDRESS_READ    (uint8_t) 0xA7
-#define SLAVE_ADDRESS_WRITE    (uint8_t) 0xA6
+#define SLAVE_OWN_ADDRESS      (uint8_t)0x68 //mpu9520 x68 without Ado
+//#define SLAVE_ADDRESS_READ    (uint8_t) 0xA7
+//#define SLAVE_ADDRESS_WRITE    (uint8_t) 0xA6
 
 #define GENERAL_CALL_ADDRESS    (uint8_t)0x00
 
-#define MASTER_WRITE_CMD       0xC1
-#define MASTER_READ_CMD        0XC2
+//#define MASTER_WRITE_CMD       0xC1
+//#define MASTER_READ_CMD        0XC2
 
 #define READ_LEN    5
 #define WRITE_LEN   5
@@ -256,13 +256,13 @@ void uart_gpio_init(void)
 void pin_init(){
 	// Pin definitions 
 	//TODO: GPIO init
-	int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
-	int adoPin = 8;
+	//int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
+	int adoPin = 8; //TODO: after defining TIMER PWM, SPI? anypin closer or easier to map
 	int myLed = 13;
 //TODO: GPIO init
 	
 	//Servo myservo; //download the servo library and inspect how it works and use it in C code later
-	const int esc_sig_pin = SERVO_PIN; // any pwm available pin (3, 6, 9, 11) on atmel atmega328
+	const int esc_sig_pin = SERVO_PIN; // PA5 TIMER2
 //	pinMode(intPin, INPUT);
 //  digitalWrite(intPin, LOW);
 //  pinMode(adoPin, OUTPUT);
@@ -284,8 +284,8 @@ IMU init function
 void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 {
 	
-	imu_state->GyroMeasError = PI * (40.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
-	imu_state->GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
+	imu_state->GyroMeasError = (float)PI * (40.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
+	imu_state->GyroMeasDrift = (float)PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
 	// There is a tradeoff in the beta parameter between accuracy and response speed.
 	// In the original Madgwick study, beta of 0.041 (corresponding to GyroMeasError of 2.7 degrees/s) was found to give optimal accuracy.
 	// However, with this value, the LSM9SD0 response time is about 10 seconds to a stable initial quaternion.
@@ -665,7 +665,7 @@ int main(void)
 	//val = i2c_handle.Instance->CR1;
 	i2c_handle.State = HAL_I2C_STATE_READY;
 	/* IMU init */
-	
+	SysTick_Init();
 	imu_init(&i2c_handle, &imu_state);
 	/* USART set up */
 	/*enable the clock for the USART2 Peripheral */
@@ -696,7 +696,7 @@ int main(void)
 
 	
 /* First initilaize the Debug UART */
-	hal_debug_uart_init( DEBUG_USART_BAUD_9600);
+	hal_debug_uart_init(DEBUG_USART_BAUD_9600);
 	
 	//uart_printf("SPI master Application Running ... \n");
 	/** set up ready and waiting for user input -- from I2C
@@ -722,178 +722,178 @@ int main(void)
 /*                         Write and read commands                            */
 /******************************************************************************/
 
-while(1)
-{	
-	//Servo motor run
-	//TODO implement PWM servo driver
-	uint32_t requiredTime = expSetting.requiredSampleTime * 1000;
-  uint32_t experiment_time_loop = 0;
-  //uint32_t start_experiment_time =  millis();
-  //check pause or restart - timer needed
-  //for (int i = 0; i < SENSORNUM; i++) {
-    //expLoopStatus.waitingTime[i] = expLoopStatus.waitingDelay; //initialising timer of each module
-    //measurements[i].sensorID = i;
-  //}
-  
-  expLoopStatus.pwmSpeed += expSetting.rotationSpeedIncrement;
-	sampleIMU(&i2c_handle, &imu_state);
-	//for continous I2C and SPI
-	// asking mpu9520 with an interval and talk to spi if needed.
-	/* USART block */
-	//TODO : EXT1 or EXT0 pull down check the lin
-	// if the signal function is set to low then -> interrupt to get this instead of while
-	
-	
-	//check again 
-	while(uart_handle.rx_state != HAL_UART_STATE_READY );
-	/*receive the message */
-	hal_uart_rx(&uart_handle,rx_buffer, 5 );
-	
-	/* SPI block */
-	//check for state ready 
-	while(SpiHandle.State != HAL_SPI_STATE_READY );
-	
-	/* Master write command */
-	addrcmd[0] = (uint8_t) CMD_MASTER_WRITE;
-	addrcmd[1] = (uint8_t) ( CMD_MASTER_WRITE >> 8 );
-	
-	/* first send the master write cmd to slave */
-	hal_spi_master_tx(&SpiHandle, addrcmd,CMD_LENGTH );
-	
-	/* application can block here, or can do other task untill above tx finishes */
-	while(SpiHandle.State != HAL_SPI_STATE_READY );
-	
-	/* this dealy helps for the slave to be ready with the ACK bytes */
-	delay(5);
-	
-	/* read back the ACK bytes from the slave */
-	hal_spi_master_rx(&SpiHandle,ack_buf, ACK_LEN);
-	
-	/* wait untill ACK reception finishes */
-	while(SpiHandle.State != HAL_SPI_STATE_READY );
-	
-	/* did we rcv the valid ACK from slave ?? */
-	if(ack_buf[1] == 0XE5 && ack_buf[0] == 0xD5 )
-	{
-		//correct ack 
-		led_toggle(GPIOD,LED_GREEN);
-		memset(ack_buf,0,(unsigned)2);
-	}
-	else
-	{
-		//invalide ack 
-		assert_error();
-		memset(ack_buf,0,2);
-	}
+	while(1)
+	{	
+		//Servo motor run
+		//TODO implement PWM servo driver
+		uint32_t requiredTime = expSetting.requiredSampleTime * 1000;
+		uint32_t experiment_time_loop = 0;
+		//uint32_t start_experiment_time =  millis();
+		//check pause or restart - timer needed
+		//for (int i = 0; i < SENSORNUM; i++) {
+			//expLoopStatus.waitingTime[i] = expLoopStatus.waitingDelay; //initialising timer of each module
+			//measurements[i].sensorID = i;
+		//}
+		
+		expLoopStatus.pwmSpeed += expSetting.rotationSpeedIncrement;
+		sampleIMU(&i2c_handle, &imu_state);
+		//for continous I2C and SPI
+		// asking mpu9520 with an interval and talk to spi if needed.
+		/* USART block */
+		//TODO : EXT1 or EXT0 pull down check the lin
+		// if the signal function is set to low then -> interrupt to get this instead of while
+		
+		
+		//check again 
+		while(uart_handle.rx_state != HAL_UART_STATE_READY );
+		/*receive the message */
+		hal_uart_rx(&uart_handle,rx_buffer, 5 );
+		
+		/* SPI block */
+		//check for state ready 
+		while(SpiHandle.State != HAL_SPI_STATE_READY );
+		
+		/* Master write command */
+		addrcmd[0] = (uint8_t) CMD_MASTER_WRITE;
+		addrcmd[1] = (uint8_t) ( CMD_MASTER_WRITE >> 8 );
+		
+		/* first send the master write cmd to slave */
+		hal_spi_master_tx(&SpiHandle, addrcmd,CMD_LENGTH );
+		
+		/* application can block here, or can do other task untill above tx finishes */
+		while(SpiHandle.State != HAL_SPI_STATE_READY );
+		
+		/* this dealy helps for the slave to be ready with the ACK bytes */
+		delay(5);
+		
+		/* read back the ACK bytes from the slave */
+		hal_spi_master_rx(&SpiHandle,ack_buf, ACK_LEN);
+		
+		/* wait untill ACK reception finishes */
+		while(SpiHandle.State != HAL_SPI_STATE_READY );
+		
+		/* did we rcv the valid ACK from slave ?? */
+		if(ack_buf[1] == 0XE5 && ack_buf[0] == 0xD5 )
+		{
+			//correct ack 
+			led_toggle(GPIOD,LED_GREEN);
+			memset(ack_buf,0,(unsigned)2);
+		}
+		else
+		{
+			//invalide ack 
+			assert_error();
+			memset(ack_buf,0,2);
+		}
 
-	/* NOW send the data stream */
-	hal_spi_master_tx(&SpiHandle, master_write_data,DATA_LENGTH );
-	while(SpiHandle.State != HAL_SPI_STATE_READY );
-	delay(5);
+		/* NOW send the data stream */
+		hal_spi_master_tx(&SpiHandle, master_write_data,DATA_LENGTH );
+		while(SpiHandle.State != HAL_SPI_STATE_READY );
+		delay(5);
 
-//	read from slave
+	//	read from slave
 
-	/* Master READ command */
-	addrcmd[0] = (uint8_t) CMD_MASTER_READ;
-	addrcmd[1] = (uint8_t) ( CMD_MASTER_READ >> 8 );
-	
-	/* first send the master write cmd to slave */
-	hal_spi_master_tx(&SpiHandle, addrcmd,CMD_LENGTH );
-	
-	/* application can block here, or can do other task untill above tx finishes */
-	while(SpiHandle.State != HAL_SPI_STATE_READY );
-	
-	/* this dealy helps for the slave to be ready with the ACK bytes */
-	delay(5);
-	
-	/* read back the ACK bytes from the slave */
-	hal_spi_master_rx(&SpiHandle,ack_buf, ACK_LEN);
-	
-	while(SpiHandle.State != HAL_SPI_STATE_READY );
-	
-	if(ack_buf[1] == 0XE5 && ack_buf[0] == 0xD5 )
-	{
-		//correct ack 
-		led_toggle(GPIOD,LED_GREEN);
-		memset(ack_buf,0,2);
-	}
-	else
-	{
-		//invalide ack 
-		assert_error();
-		memset(ack_buf,0,2);
-	}
-	
-	/* start receiving from the slave */
-	hal_spi_master_rx(&SpiHandle,master_read_buffer, DATA_LENGTH);
-	
-	while(SpiHandle.State != HAL_SPI_STATE_READY );
-	
-	/* compare the data rcvd form slave, with what slave supposed to send */
-	if(Buffercmp(master_read_buffer,slave_reply_data,DATA_LENGTH))
-	{
-		// we didnt rcv what needs to be rcvd !!! Error !
-		led_toggle(GPIOD,LED_RED);
-	}else
-	{
-		//Rcvd correct data 
-		led_toggle(GPIOD,LED_BLUE);
-		for(i=0;i<DATA_LENGTH;i++)
-		uart_printf("Data Received from slave: %x\n",master_read_buffer[i]);
-	}
-			
-	delay(5);
-	
-	/* I2C block - interval with a timmer and measure it*/
-	while(i2c_handle.State != HAL_I2C_STATE_READY);
-	/* first send the master write cmd to slave */
-	master_write_req = MASTER_WRITE_CMD;
-	hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,(uint8_t*)&master_write_req,1);
-	while(i2c_handle.State != HAL_I2C_STATE_READY);
-	
-	master_write_req = WRITE_LEN;
-	/* Now send the number of bytes to be written */
-	hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,(uint8_t*)&master_write_req,1);
-	
-	while(i2c_handle.State != HAL_I2C_STATE_READY);
-	
-	/* NOW send the data stream */
-	hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,master_tx_buffer,WRITE_LEN);
-	
-	while(i2c_handle.State != HAL_I2C_STATE_READY);
-	
+		/* Master READ command */
+		addrcmd[0] = (uint8_t) CMD_MASTER_READ;
+		addrcmd[1] = (uint8_t) ( CMD_MASTER_READ >> 8 );
+		
+		/* first send the master write cmd to slave */
+		hal_spi_master_tx(&SpiHandle, addrcmd,CMD_LENGTH );
+		
+		/* application can block here, or can do other task untill above tx finishes */
+		while(SpiHandle.State != HAL_SPI_STATE_READY );
+		
+		/* this dealy helps for the slave to be ready with the ACK bytes */
+		delay(5);
+		
+		/* read back the ACK bytes from the slave */
+		hal_spi_master_rx(&SpiHandle,ack_buf, ACK_LEN);
+		
+		while(SpiHandle.State != HAL_SPI_STATE_READY );
+		
+		if(ack_buf[1] == 0XE5 && ack_buf[0] == 0xD5 )
+		{
+			//correct ack 
+			led_toggle(GPIOD,LED_GREEN);
+			memset(ack_buf,0,2);
+		}
+		else
+		{
+			//invalide ack 
+			assert_error();
+			memset(ack_buf,0,2);
+		}
+		
+		/* start receiving from the slave */
+		hal_spi_master_rx(&SpiHandle,master_read_buffer, DATA_LENGTH);
+		
+		while(SpiHandle.State != HAL_SPI_STATE_READY );
+		
+		/* compare the data rcvd form slave, with what slave supposed to send */
+		if(Buffercmp(master_read_buffer,slave_reply_data,DATA_LENGTH))
+		{
+			// we didnt rcv what needs to be rcvd !!! Error !
+			led_toggle(GPIOD,LED_RED);
+		}else
+		{
+			//Rcvd correct data 
+			led_toggle(GPIOD,LED_BLUE);
+			for(i=0;i<DATA_LENGTH;i++)
+			uart_printf("Data Received from slave: %x\n",master_read_buffer[i]);
+		}
+				
+		delay(5);
+		
+//		/* I2C block - interval with a timmer and measure it*/
+//		while(i2c_handle.State != HAL_I2C_STATE_READY);
+//		/* first send the master write cmd to slave */
+//		master_write_req = MASTER_WRITE_CMD;
+//		hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,(uint8_t*)&master_write_req,1);
+//		while(i2c_handle.State != HAL_I2C_STATE_READY);
+//		
+//		master_write_req = WRITE_LEN;
+//		/* Now send the number of bytes to be written */
+//		hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,(uint8_t*)&master_write_req,1);
+//		
+//		while(i2c_handle.State != HAL_I2C_STATE_READY);
+//		
+//		/* NOW send the data stream */
+//		hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,master_tx_buffer,WRITE_LEN);
+//		
+//		while(i2c_handle.State != HAL_I2C_STATE_READY);
+//		
 
-	
-	/* first send the master read cmd to slave */
-	master_read_req = MASTER_READ_CMD;
-	hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,(uint8_t*)&master_read_req,1);
-	while(i2c_handle.State != HAL_I2C_STATE_READY);
-	
-	master_read_req = READ_LEN;
-	/* Now send the number of bytes to be read */
-	hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,(uint8_t*)&master_read_req,1);
-	
-	while(i2c_handle.State != HAL_I2C_STATE_READY);
-	
-	memset(master_rx_buffer,0, 5);
-	/* NOW read the data stream */
-	hal_i2c_master_rx(&i2c_handle,SLAVE_ADDRESS_READ,master_rx_buffer,READ_LEN);
-	while(i2c_handle.State != HAL_I2C_STATE_READY);
-	
-	if ( Buffercmp(slave_tx_buffer,master_rx_buffer,READ_LEN))
-	{
-		led_turn_on(GPIOD,LED_RED);
-	}else
-		led_toggle(GPIOD,LED_BLUE);
-	
-	//led_turn_on(GPIOD,LED_ORANGE);
-	//TODO: instead of delay make this work with a timer
-	//delay(5);
-	
-	/* Uart section  */
-	
-	
-}
+//		
+//		/* first send the master read cmd to slave */
+//		master_read_req = MASTER_READ_CMD;
+//		hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,(uint8_t*)&master_read_req,1);
+//		while(i2c_handle.State != HAL_I2C_STATE_READY);
+//		
+//		master_read_req = READ_LEN;
+//		/* Now send the number of bytes to be read */
+//		hal_i2c_master_tx(&i2c_handle,SLAVE_ADDRESS_WRITE,(uint8_t*)&master_read_req,1);
+//		
+//		while(i2c_handle.State != HAL_I2C_STATE_READY);
+//		
+//		memset(master_rx_buffer,0, 5);
+//		/* NOW read the data stream */
+//		hal_i2c_master_rx(&i2c_handle,SLAVE_ADDRESS_READ,master_rx_buffer,READ_LEN);
+//		while(i2c_handle.State != HAL_I2C_STATE_READY);
+//		
+//		if ( Buffercmp(slave_tx_buffer,master_rx_buffer,READ_LEN))
+//		{
+//			led_turn_on(GPIOD,LED_RED);
+//		}else
+//			led_toggle(GPIOD,LED_BLUE);
+		
+		//led_turn_on(GPIOD,LED_ORANGE);
+		//TODO: instead of delay make this work with a timer
+		//delay(5);
+		
+		/* Uart section  */
+		
+		
+	}
 
 	return 0;
 }

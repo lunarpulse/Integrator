@@ -329,8 +329,8 @@ static void  hal_uart_handle_TC_interrupt(uart_handle_t *huart)
 void hal_uart_clear_error_flag(uart_handle_t *huart)
 {
 	uint32_t tmpreg = 0x00;                
-	tmpreg = huart->Instance->SR;        
-	tmpreg = huart->Instance->DR;        
+	huart->Instance->SR=tmpreg; //tmpreg = huart->Instance->SR;        
+	huart->Instance->DR=tmpreg; //tmpreg = huart->Instance->DR;        
 	
 }
 

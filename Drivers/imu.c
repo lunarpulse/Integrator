@@ -334,7 +334,7 @@ void sampleIMUtoSensor(i2c_handle_t *handle, ImuState_t *imu_state , SensorData 
 				free(temp);
 				
         imu_state->tempCount = readTempData(handle);  // Read the adc values
-        imu_state->temperature = ((float) imu_state->tempCount) / 333.87 + 21.0; // Temperature in degrees Centigrade TODO need to change it to the
+        imu_state->temperature = ((float) imu_state->tempCount) / 333.87f + 21.0f; // Temperature in degrees Centigrade TODO need to change it to the
         sensorData->gyroValue.temperature = (uint16_t)(imu_state->temperature);
         // Print temperature in degrees Centigrade
         //uart_printf("Temperature is ");  uart_printf(temperature, 1);  uart_printf(" degrees C\n"); // Print T values to tenths of s degree C
@@ -383,7 +383,7 @@ void sampleIMUtoSensor(i2c_handle_t *handle, ImuState_t *imu_state , SensorData 
       imu_state->roll  = atan2(2.0f * (imu_state->q[0] * imu_state->q[1] + imu_state->q[2] * imu_state->q[3]), imu_state->q[0] * imu_state->q[0] - imu_state->q[1] * imu_state->q[1] - imu_state->q[2] * imu_state->q[2] + imu_state->q[3] * imu_state->q[3]);
       imu_state->pitch *= 180.0f / PI;
       imu_state->yaw   *= 180.0f / PI;
-      imu_state->yaw   -= 10.9; // Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
+      imu_state->yaw   -= 10.9f; // Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
       imu_state->roll  *= 180.0f / PI;
 
       sensorData->gyroValue.yaw = (uint16_t)(imu_state->yaw);
@@ -538,9 +538,9 @@ void initAK8963(i2c_handle_t *handle, ImuState_t *imu_state, float * destination
   writeByte(handle, AK8963_ADDRESS, AK8963_CNTL, 0x0F); // Enter Fuse ROM access mode
   delay_gen_i2c(10);
   readBytes(handle, AK8963_ADDRESS, AK8963_ASAX, 3, &rawData[0]);  // Read the x-, y-, and z-axis calibration values
-  destination[0] =  (float)(rawData[0] - 128) / 256. + 1.; // Return x-axis sensitivity adjustment values, etc.
-  destination[1] =  (float)(rawData[1] - 128) / 256. + 1.;
-  destination[2] =  (float)(rawData[2] - 128) / 256. + 1.;
+  destination[0] =  (float)(rawData[0] - 128) / 256.f + 1.f; // Return x-axis sensitivity adjustment values, etc.
+  destination[1] =  (float)(rawData[1] - 128) / 256.f + 1.f;
+  destination[2] =  (float)(rawData[2] - 128) / 256.f + 1.f;
   writeByte(handle, AK8963_ADDRESS, AK8963_CNTL, 0x00); // Power down magnetometer
   delay_gen_i2c(10);
   // Configure the magnetometer for continuous read and highest resolution
@@ -832,18 +832,18 @@ void MPU9250SelfTest(i2c_handle_t *handle, float * destination) // Should return
   selfTest[5] = readByte(handle, MPU9250_ADDRESS, SELF_TEST_Z_GYRO);  // Z-axis gyro self-test results
 
   // Retrieve factory self-test value from self-test code reads
-  factoryTrim[0] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[0] - 1.0) )); // FT[Xa] factory trim calculation
-  factoryTrim[1] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[1] - 1.0) )); // FT[Ya] factory trim calculation
-  factoryTrim[2] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[2] - 1.0) )); // FT[Za] factory trim calculation
-  factoryTrim[3] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[3] - 1.0) )); // FT[Xg] factory trim calculation
-  factoryTrim[4] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[4] - 1.0) )); // FT[Yg] factory trim calculation
-  factoryTrim[5] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[5] - 1.0) )); // FT[Zg] factory trim calculation
+  factoryTrim[0] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[0] - 1.0f) )); // FT[Xa] factory trim calculation
+  factoryTrim[1] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[1] - 1.0f) )); // FT[Ya] factory trim calculation
+  factoryTrim[2] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[2] - 1.0f) )); // FT[Za] factory trim calculation
+  factoryTrim[3] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[3] - 1.0f) )); // FT[Xg] factory trim calculation
+  factoryTrim[4] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[4] - 1.0f) )); // FT[Yg] factory trim calculation
+  factoryTrim[5] = (float)(2620 / 1 << FS) * (pow( 1.01 , ((float)selfTest[5] - 1.0f) )); // FT[Zg] factory trim calculation
 
   // Report results as a ratio of (STR - FT)/FT; the change from Factory Trim of the Self-Test Response
   // To get percent, must multiply by 100
   for (int i = 0; i < 3; i++) {
-    destination[i]   = 100.0 * ((float)(aSTAvg[i] - aAvg[i])) / factoryTrim[i] - 100.; // Report percent differences
-    destination[i + 3] = 100.0 * ((float)(gSTAvg[i] - gAvg[i])) / factoryTrim[i + 3] - 100.; // Report percent differences
+    destination[i]   = 100.0f * ((float)(aSTAvg[i] - aAvg[i])) / factoryTrim[i] - 100.f; // Report percent differences
+    destination[i + 3] = 100.0f * ((float)(gSTAvg[i] - gAvg[i])) / factoryTrim[i + 3] - 100.f; // Report percent differences
   }
 }
 
@@ -893,7 +893,7 @@ void magcalMPU9250(i2c_handle_t *handle, ImuState_t *imu_state, float * dest1, f
 
 
   float avg_rad = mag_scale[0] + mag_scale[1] + mag_scale[2];
-  avg_rad /= 3.0;
+  avg_rad /= 3.0f;
 
   dest2[0] = avg_rad / ((float)mag_scale[0]);
   dest2[1] = avg_rad / ((float)mag_scale[1]);
@@ -927,7 +927,7 @@ void writeByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress, uint8_
 
 uint8_t readByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress)
 {
-  uint8_t data; // `data` will store the register data
+  uint8_t data[1] = {0}; // `data` will store the register data
 	uint8_t numData = 1;
   //Wire.beginTransmission(address);         // Initialize the Tx buffer
   //Wire.write(subAddress);                  // Put slave register address in Tx buffer
@@ -937,14 +937,14 @@ uint8_t readByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress)
 	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&numData,1);
 	while(handle->State != HAL_I2C_STATE_READY){continue;};
 	
-	hal_i2c_master_rx(handle, (uint8_t)address, (uint8_t*)&data,1);
+	hal_i2c_master_rx(handle, (uint8_t)address, data,1);
 	while(handle->State != HAL_I2C_STATE_READY){continue;};
 	//Wire.endTransmission();        // Send the Tx buffer, but send a restart to keep connection alive
   //Wire.endTransmission(false);             // Send the Tx buffer, but send a restart to keep connection alive
   //  Wire.requestFrom(address, 1);  // Read one byte from slave register address
   //Wire.requestFrom(address, (size_t) 1);  // Read one byte from slave register address
   //data = Wire.read();                      // Fill Rx buffer with result
-  return data;                             // Return data read from slave register
+  return *data;                             // Return data read from slave register
 }
 
 void readBytes(i2c_handle_t *handle, uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest)

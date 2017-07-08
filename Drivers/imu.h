@@ -7,10 +7,10 @@
 #define PACKSIZE 32
 #define SENSORNUM 2
 #define EXPDEBUG1 true
-#define SerialDebug false// set to true to get Serial output for debugging
-#define PI           3.14159265358979323846  /* pi */
+#define SerialDebug 1// set to true to get Serial output for debugging
+#define PI           3.14159265358979323846f  /* pi */
 //Magnetometer Registers
-#define AK8963_ADDRESS   0x0C
+#define AK8963_ADDRESS   0x0C<<1
 #define WHO_AM_I_AK8963  0x00 // should return 0x48
 #define INFO             0x01
 #define AK8963_ST1       0x02  // data ready status bit 0
@@ -146,10 +146,10 @@
 #define ZA_OFFSET_L      0x7E
 
 #if ADO
-#define MPU9250_ADDRESS 0x69  // Device address when ADO = 1
+#define MPU9250_ADDRESS 0x69<<1  // Device address when ADO = 1
 #else
-#define MPU9250_ADDRESS 0x68  // Device address when ADO = 0
-#define AK8963_ADDRESS 0x0C   //  Address of magnetometer
+#define MPU9250_ADDRESS 0x68<<1  // Device address when ADO = 0
+#define AK8963_ADDRESS 0x0C<<1   //  Address of magnetometer
 #endif
 
 typedef enum { false, true } bool;
