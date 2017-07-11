@@ -150,7 +150,7 @@ const int ultrasonic_sensor_address[SENSORNUM] = {34, 24}; //secsor collections}
 //  if (SerialDebug) {
 //    uart_printf("MPU9250 "); uart_printf("I AM "); uart_printf(c, HEX); uart_printf(" I should be "); Serial.println(0x71, HEX);
 //  }
-//  delay_gen_i2c(200);
+//  delay(200);
 //  if (c == 0x71) // WHO_AM_I should always be 0x71
 //  {
 //    if (SerialDebug) {
@@ -165,7 +165,7 @@ const int ultrasonic_sensor_address[SENSORNUM] = {34, 24}; //secsor collections}
 //      uart_printf("y-axis self test: gyration trim within : "); uart_printf(SelfTest[4], 1); uart_printf("% of factory value\n");
 //      uart_printf("z-axis self test: gyration trim within : "); uart_printf(SelfTest[5], 1); uart_printf("% of factory value\n");
 //    }
-//    delay_gen_i2c(500);
+//    delay(500);
 //    getAres();
 //    getGres();
 //    getMres();
@@ -183,7 +183,7 @@ const int ultrasonic_sensor_address[SENSORNUM] = {34, 24}; //secsor collections}
 //      uart_printf(gyroBias[2]);
 //      uart_printf("o/s\n");
 //    }
-//    delay_gen_i2c(500);
+//    delay(500);
 //    initMPU9250();
 //    if (SerialDebug) {
 //      uart_printf("MPU9250 initialized for active data mode....\n"); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
@@ -193,7 +193,7 @@ const int ultrasonic_sensor_address[SENSORNUM] = {34, 24}; //secsor collections}
 //    if (SerialDebug) {
 //      uart_printf("AK8963 \n"); uart_printf("I AM "); uart_printf(d, HEX); uart_printf(" I should be "); uart_printf(0x48, HEX);
 //    }
-//    delay_gen_i2c(100);
+//    delay(100);
 
 //    // Get magnetometer calibration from AK8963 ROM
 //    initAK8963(magCalibration);  if (SerialDebug) {
@@ -221,7 +221,7 @@ const int ultrasonic_sensor_address[SENSORNUM] = {34, 24}; //secsor collections}
 //      uart_printf("Y-Axis sensitivity adjustment value "); Serial.println(magCalibration[1], 2);
 //      uart_printf("Z-Axis sensitivity adjustment value "); Serial.println(magCalibration[2], 2);
 //    }
-//    delay_gen_i2c(500);
+//    delay(500);
 //  }
 //  else
 //  {
@@ -247,11 +247,11 @@ void loop ()
 //====== Set of helper function to access acceleration. gyroscope, magnetometer, and temperature data
 //===================================================================================================================
 
-void delay_gen_i2c(uint32_t cnt)
+/*void delay(uint32_t cnt)
 {
 	//uint32_t cnt = 800000;
 	while(cnt--);
-}
+}*/
 
 void sampleIMU(i2c_handle_t *handle, ImuState_t *imu_state) {
   if (readByte(handle, MPU9250_ADDRESS, INT_STATUS) & 0x01) {  // On interrupt from mpu9250, check if data ready interrupt
@@ -535,20 +535,20 @@ void initAK8963(i2c_handle_t *handle, ImuState_t *imu_state, float * destination
   // First extract the factory calibration for each magnetometer axis
   uint8_t rawData[3];  // x/y/z gyro calibration data stored here
   writeByte(handle, AK8963_ADDRESS, AK8963_CNTL, 0x00); // Power down magnetometer
-  delay_gen_i2c(10);
+  delay(10);
   writeByte(handle, AK8963_ADDRESS, AK8963_CNTL, 0x0F); // Enter Fuse ROM access mode
-  delay_gen_i2c(10);
+  delay(10);
   readBytes(handle, AK8963_ADDRESS, AK8963_ASAX, 3, &rawData[0]);  // Read the x-, y-, and z-axis calibration values
   destination[0] =  (float)(rawData[0] - 128) / 256.f + 1.f; // Return x-axis sensitivity adjustment values, etc.
   destination[1] =  (float)(rawData[1] - 128) / 256.f + 1.f;
   destination[2] =  (float)(rawData[2] - 128) / 256.f + 1.f;
   writeByte(handle, AK8963_ADDRESS, AK8963_CNTL, 0x00); // Power down magnetometer
-  delay_gen_i2c(10);
+  delay(10);
   // Configure the magnetometer for continuous read and highest resolution
   // set Mscale bit 4 to 1 (0) to enable 16 (14) bit resolution in CNTL register,
   // and enable continuous mode data acquisition Mmode (bits [3:0]), 0010 for 8 Hz and 0110 for 100 Hz sample rates
   writeByte(handle, AK8963_ADDRESS, AK8963_CNTL, imu_state->mscale << 4 | imu_state->mmode); // Set magnetometer data resolution and sample ODR
-  delay_gen_i2c(10);
+  delay(10);
 }
 
 
@@ -556,11 +556,11 @@ void initMPU9250(i2c_handle_t *handle, ImuState_t *imu_state)
 {
   // wake up device
   writeByte(handle, MPU9250_ADDRESS, PWR_MGMT_1, 0x00); // Clear sleep mode bit (6), enable all sensors
-  delay_gen_i2c(100); // Wait for all registers to reset
+  delay(100); // Wait for all registers to reset
 
   // get stable time source
   writeByte(handle, MPU9250_ADDRESS, PWR_MGMT_1, 0x01);  // Auto select clock source to be PLL gyroscope reference if ready else
-  delay_gen_i2c(200);
+  delay(200);
 
   // Configure Gyro and Thermometer
   // Disable FSYNC and set thermometer and gyro bandwidth to 41 and 42 Hz, respectively;
@@ -608,7 +608,7 @@ void initMPU9250(i2c_handle_t *handle, ImuState_t *imu_state)
   // can join the I2C bus and all can be controlled by the Arduino as master
   writeByte(handle, MPU9250_ADDRESS, INT_PIN_CFG, 0x22);
   writeByte(handle, MPU9250_ADDRESS, INT_ENABLE, 0x01);  // Enable data ready (bit 0) interrupt
-  delay_gen_i2c(100);
+  delay(100);
 }
 
 // Function which accumulates gyro and accelerometer data after device initialization. It calculates the average
@@ -621,13 +621,13 @@ void calibrateMPU9250(i2c_handle_t *handle, float * dest1, float * dest2)
 
   // reset device
   writeByte(handle, MPU9250_ADDRESS, PWR_MGMT_1, 0x80); // Write a one to bit 7 reset bit; toggle reset device
-  delay_gen_i2c(100);
+  delay(100);
 
   // get stable time source; Auto select clock source to be PLL gyroscope reference if ready
   // else use the internal oscillator, bits 2:0 = 001
   writeByte(handle, MPU9250_ADDRESS, PWR_MGMT_1, 0x01);
   writeByte(handle, MPU9250_ADDRESS, PWR_MGMT_2, 0x00);
-  delay_gen_i2c(200);
+  delay(200);
 
   // Configure device for bias calculation
   writeByte(handle, MPU9250_ADDRESS, INT_ENABLE, 0x00);   // Disable all interrupts
@@ -636,7 +636,7 @@ void calibrateMPU9250(i2c_handle_t *handle, float * dest1, float * dest2)
   writeByte(handle, MPU9250_ADDRESS, I2C_MST_CTRL, 0x00); // Disable I2C master
   writeByte(handle, MPU9250_ADDRESS, USER_CTRL, 0x00);    // Disable FIFO and I2C master modes
   writeByte(handle, MPU9250_ADDRESS, USER_CTRL, 0x0C);    // Reset FIFO and DMP
-  delay_gen_i2c(15);
+  delay(15);
 
   // Configure MPU6050 gyro and accelerometer for bias calculation
   writeByte(handle, MPU9250_ADDRESS, MPU9250CONFIG, 0x01);      // Set low-pass filter to 188 Hz
@@ -650,7 +650,7 @@ void calibrateMPU9250(i2c_handle_t *handle, float * dest1, float * dest2)
   // Configure FIFO to capture accelerometer and gyro data for bias calculation
   writeByte(handle, MPU9250_ADDRESS, USER_CTRL, 0x40);   // Enable FIFO
   writeByte(handle, MPU9250_ADDRESS, FIFO_EN, 0x78);     // Enable gyro and accelerometer sensors for FIFO  (max size 512 bytes in MPU-9150)
-  delay_gen_i2c(40); // accumulate 40 samples in 40 milliseconds = 480 bytes
+  delay(40); // accumulate 40 samples in 40 milliseconds = 480 bytes
 
   // At end of sample accumulation, turn off FIFO sensor read
   writeByte(handle, MPU9250_ADDRESS, FIFO_EN, 0x00);        // Disable gyro and accelerometer sensors for FIFO
@@ -799,7 +799,7 @@ void MPU9250SelfTest(i2c_handle_t *handle, float * destination) // Should return
   // Configure the accelerometer for self-test
   writeByte(handle, MPU9250_ADDRESS, ACCEL_CONFIG, 0xE0); // Enable self test on all three axes and set accelerometer range to +/- 2 g
   writeByte(handle, MPU9250_ADDRESS, GYRO_CONFIG,  0xE0); // Enable self test on all three axes and set gyro range to +/- 250 degrees/s
-  delay_gen_i2c(25);  // Delay a while to let the device stabilize
+  delay(25);  // Delay a while to let the device stabilize
 
   for ( int ii = 0; ii < 200; ii++) { // get average self-test values of gyro and acclerometer
 
@@ -822,7 +822,7 @@ void MPU9250SelfTest(i2c_handle_t *handle, float * destination) // Should return
   // Configure the gyro and accelerometer for normal operation
   writeByte(handle, MPU9250_ADDRESS, ACCEL_CONFIG, 0x00);
   writeByte(handle, MPU9250_ADDRESS, GYRO_CONFIG,  0x00);
-  delay_gen_i2c(25);  // Delay a while to let the device stabilize
+  delay(25);  // Delay a while to let the device stabilize
 
   // Retrieve accelerometer and gyro factory Self-Test Code from USR_Reg
   selfTest[0] = readByte(handle, MPU9250_ADDRESS, SELF_TEST_X_ACCEL); // X-axis accel self-test results
@@ -855,7 +855,7 @@ void magcalMPU9250(i2c_handle_t *handle, ImuState_t *imu_state, float * dest1, f
   int16_t mag_max[3] = { -32767, -32767, -32767}, mag_min[3] = {32767, 32767, 32767}, mag_temp[3] = {0, 0, 0};
 
   uart_printf("Mag Calibration: Wave device in a figure eight until done!\n");
-  delay_gen_i2c(1000);
+  delay(1000);
 
   // shoot for ~fifteen seconds of mag data
   if (imu_state->mmode == 0x02) sample_count = 128; // at 8 Hz ODR, new mag data is available every 125 ms
@@ -866,8 +866,8 @@ void magcalMPU9250(i2c_handle_t *handle, ImuState_t *imu_state, float * dest1, f
       if (mag_temp[jj] > mag_max[jj]) mag_max[jj] = mag_temp[jj];
       if (mag_temp[jj] < mag_min[jj]) mag_min[jj] = mag_temp[jj];
     }
-    if (imu_state->mmode == 0x02) delay_gen_i2c(135); // at 8 Hz ODR, new mag data is available every 125 ms
-    if (imu_state->mmode == 0x06) delay_gen_i2c(12); // at 100 Hz ODR, new mag data is available every 10 ms
+    if (imu_state->mmode == 0x02) delay(135); // at 8 Hz ODR, new mag data is available every 125 ms
+    if (imu_state->mmode == 0x06) delay(12); // at 100 Hz ODR, new mag data is available every 10 ms
   }
 	char *temp = NULL;
 	Sasprintf(temp, "avg mag x   y   z:\n %d %d %d\n", (mag_max[0] + mag_min[0] ) / 2,(mag_max[1] + mag_min[1] ) / 2,(mag_max[2] + mag_min[2] ) / 2); 
@@ -914,13 +914,13 @@ void writeByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress, uint8_
 	//Wire.beginTransmission(address);  // Initialize the Tx buffer
   //Wire.write(subAddress);           // Put slave register address in Tx buffer
   //Wire.write(data);                 // Put data in Tx buffer
-  hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&subAddress,1);
+  hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&subAddress,(uint32_t)numData);
 	while(handle->State != HAL_I2C_STATE_READY){continue;};
 	
-	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&numData,1);
+	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&numData,(uint32_t)numData);
 	while(handle->State != HAL_I2C_STATE_READY){continue;};
 	
-	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&data,1);
+	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&data,(uint32_t)numData);
 	while(handle->State != HAL_I2C_STATE_READY){continue;};
 	
 	//Wire.endTransmission();           // Send the Tx buffer
@@ -933,22 +933,22 @@ uint8_t readByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress)
 	
 	//not busy now
 	//Set slave address
-	handle->Instance->SR1 |= (0x01 << 3);
+	//handle->Instance->SR1 |= (0x01 << 3);
+	const uint8_t data [1] = {0};
+  	//uint8_t data=0; // `data` will store the register data
+	const uint32_t numData = 1;
 	
-  uint8_t data=0; // `data` will store the register data
-	uint8_t numData = 1;
-	
-  //Wire.beginTransmission(address);         // Initialize the Tx buffer
-  //Wire.write(subAddress);                  // Put slave register address in Tx buffer
-  hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&subAddress,(uint32_t)1);
+	//Wire.beginTransmission(address);         // Initialize the Tx buffer
+	//Wire.write(subAddress);                  // Put slave register address in Tx buffer
+  	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&subAddress,(uint32_t)numData);
 	while(handle->State != HAL_I2C_STATE_READY){
 	}
 	
-	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&numData,(uint32_t)1);
+	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&numData,(uint32_t)numData);
 	while(handle->State != HAL_I2C_STATE_READY){
 	}
 	
-	hal_i2c_master_rx(handle, (uint8_t)address, (uint8_t*)&data,(uint32_t)1);
+	hal_i2c_master_rx(handle, (uint8_t)address, (uint8_t*)&data,(uint32_t)numData);
 	while(handle->State != HAL_I2C_STATE_READY){
 	}
 		
@@ -960,7 +960,7 @@ uint8_t readByte(i2c_handle_t *handle, uint8_t address, uint8_t subAddress)
 	
 	
 	
-  return data;                             // Return data read from slave register
+  return *data;                             // Return data read from slave register
 }
 
 void readBytes(i2c_handle_t *handle, uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest)
@@ -976,13 +976,13 @@ void readBytes(i2c_handle_t *handle, uint8_t address, uint8_t subAddress, uint8_
   //  dest[i++] = Wire.read();
   //}         // Put read results in the Rx buffer
 	
-	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&subAddress,1);
+	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&subAddress,(uint32_t)1);
 	while(handle->State != HAL_I2C_STATE_READY){continue;};
 	
-	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&count,1);
+	hal_i2c_master_tx(handle, (uint8_t)address, (uint8_t*)&count,(uint32_t)1);
 	while(handle->State != HAL_I2C_STATE_READY){continue;};
 	
-	hal_i2c_master_rx(handle, (uint8_t)address, dest, count);
+	hal_i2c_master_rx(handle, (uint8_t)address, dest, (uint32_t)count);
 	while(handle->State != HAL_I2C_STATE_READY){continue;};
 }
 

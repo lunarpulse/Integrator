@@ -254,7 +254,7 @@ typedef	struct
 	
 	
 }ImuState_t;
-void sampleIMUtoSensor(i2c_handle_t *handle, ImuState_t *imu_state , SensorData * sensorData);
+//void sampleIMUtoSensor(i2c_handle_t *handle, ImuState_t *imu_state , SensorData * sensorData);
 void sampleIMU(i2c_handle_t *handle, ImuState_t *imu_state);
 void getAres(ImuState_t *imu_state);
 void getGres(ImuState_t *imu_state);
