@@ -42,7 +42,7 @@
 
 spi_handle_t SpiHandle;
 i2c_handle_t i2c_handle;
-uart_handle_t uart_handle, debug_handle;
+uart_handle_t uart_handle1,uart_handle2,uart_handle3,uart_handle6, debug_handle;
 
 int TestReady = 0;
 
@@ -105,65 +105,6 @@ extern void HAL_NVIC_EnableIRQ(IRQn_Type IRQn);
 
 
 /* project variables */
-
-// structure to hold experimental sensor data from sensor nodes
-typedef struct
-{ //total 32 byte of
-  uint32_t angularSpeed;  // 2 bytes (speed value : 2byte uint32_t 16bit pwm; number sample points wrod 0-63655| byte)
-  uint32_t msgLength;    // 1-14 data
-
-  uint32_t data0;    // 1 data points in uint32_t
-  uint32_t data1;    // 1 data points in uint32_t
-  uint32_t data2;    // 1 data points in uint32_t
-  uint32_t data3;    // 1 data points in uint32_t
-  uint32_t data4;    // 1 data points in uint32_t
-  uint32_t data5;    // 1 data points in uint32_t
-  uint32_t data6;    // 1 data points in uint32_t
-  uint32_t data7;    // 1 data points in uint32_t
-  uint32_t data8;    // 1 data points in uint32_t
-  uint32_t data9;    // 1 data points in uint32_t
-  uint32_t data10;   // 1 data points in uint32_t
-  uint32_t data11;   // 1 data points in uint32_t
-  uint32_t data12;   // 1 data points in uint32_t
-  uint32_t data13;   // 1 data points in uint32_t
-  // total 1 to 13 uint32_t of data
-} ExperimentPayload;
-
-// structure to hold experimental configuration data from users
-typedef struct 
-{
-  uint32_t numb_transmit_record;
-  uint32_t sensorNumber;//SENSORNUM;
-  uint32_t rotationSpeedIncrement;//1;   // I length of bootloader hex data (bytes)
-  uint32_t measurmentFrequency;//20; //F
-  uint32_t requiredSampleTime;//20; // required time each sampleing loop
-  uint32_t requiredSampleNumber;//18; //M
-  uint32_t rotationDirection;//1; //1 for clockwise 0 for anticlockwise;
-  uint32_t pauseTime;//1; //1 for clockwise 2 for anticlockwise;
-  uint32_t restartValue;//1; //1 for clockwise 2 for anticlockwise;
-  uint32_t speed_offset;//20;
-  uint32_t pwmLimit;//132;
-  uint32_t arm;//53;
-  float coefficient_yaw;//0.1;
-  uint32_t sinage[SENSORNUM];//{1};
-  uint32_t increment_waiting_time [SENSORNUM];//{2};
-} ExperimentSetting;
-
-
-
-typedef struct {
-  uint32_t pwmSpeed;//90;   // I length of bootloader hex data (bytes)
-  uint32_t sampleCounter;//0; //when came out of the measurement loop then store the counter here and catch up from where left off
-  uint32_t waitingDelay;//30; //frequency delay between measuemrents
-  bool completeMeasurementLoop;//false;
-  uint32_t prevRotation;//1;
-  float sound_speed;//340.29;
-  uint32_t repeatedErrorCount[SENSORNUM];//{0};
-  uint32_t noErrorCount[SENSORNUM];//{0};
-  uint32_t waitingTime[SENSORNUM];//{0};
-  bool triggered[SENSORNUM];//{false};
-  bool recieved[SENSORNUM];//{false};
-} ExperimentStatus;
 
 ///////////////////////////////////Initialisation Functions////////////////////////////////
 /* configure gpio for spi functionality */
@@ -234,23 +175,75 @@ void i2c_gpio_init()
 void uart_gpio_init(void)
 {
 	gpio_pin_conf_t uart_pin_conf;
-	
-/*enable the clock for the GPIO port A */
+	{/*uart1*/
+		/*enable the clock for the GPIO port A */
 	_HAL_RCC_GPIOA_CLK_ENABLE();  
 	
-/*configure the GPIO_PORT_A_PIN_2 as TX */
-	uart_pin_conf.pin = USARTx_TX_PIN;
+	/*configure the GPIO_PORT_A_PIN_9 as TX */
+	uart_pin_conf.pin = USART1_TX_PIN;
 	uart_pin_conf.mode = GPIO_PIN_ALT_FUN_MODE;
 	uart_pin_conf.op_type = GPIO_PIN_OP_TYPE_PUSHPULL;
 	uart_pin_conf.speed =  GPIO_PIN_SPEED_HIGH;
 	uart_pin_conf.pull  =  GPIO_PIN_NO_PULL_PUSH;
-	hal_gpio_set_alt_function(GPIOA,USARTx_TX_PIN,USARTx_TX_AF);
+	hal_gpio_set_alt_function(GPIOA,USART1_TX_PIN,USART1_TX_AF);
 	hal_gpio_init(GPIOA ,&uart_pin_conf);
 
-	/*configure the GPIO_PORT_A_PIN_3 as RX */
-	uart_pin_conf.pin = USARTx_RX_PIN;
-	hal_gpio_set_alt_function(GPIOA,USARTx_RX_PIN,USARTx_TX_AF);
+	/*configure the GPIO_PORT_A_PIN_10 as RX */
+	uart_pin_conf.pin = USART1_RX_PIN;
+	hal_gpio_set_alt_function(GPIOA,USART1_RX_PIN,USART1_TX_AF);
 	hal_gpio_init(GPIOA ,&uart_pin_conf);
+	}
+	{/*uart2*/
+		/*enable the clock for the GPIO port D */  
+	_HAL_RCC_GPIOD_CLK_ENABLE();
+	/*configure the GPIO_PORT_D_PIN_5 as TX */
+	uart_pin_conf.pin = USART2_TX_PIN;
+	uart_pin_conf.mode = GPIO_PIN_ALT_FUN_MODE;
+	uart_pin_conf.op_type = GPIO_PIN_OP_TYPE_PUSHPULL;
+	uart_pin_conf.speed =  GPIO_PIN_SPEED_HIGH;
+	uart_pin_conf.pull  =  GPIO_PIN_NO_PULL_PUSH;
+	hal_gpio_set_alt_function(GPIOD,USART2_TX_PIN,USART2_TX_AF);
+	hal_gpio_init(GPIOD ,&uart_pin_conf);
+
+	/*configure the GPIO_PORT_D_PIN_6 as RX */
+	uart_pin_conf.pin = USART2_RX_PIN;
+	hal_gpio_set_alt_function(GPIOD,USART2_RX_PIN,USART2_TX_AF);
+	hal_gpio_init(GPIOD ,&uart_pin_conf);
+	}
+	{/*uart3*/
+	/*enable the clock for the GPIO port D */  
+	_HAL_RCC_GPIOD_CLK_ENABLE();
+	/*configure the GPIO_PORT_D_PIN_8 as TX */
+	uart_pin_conf.pin = USART3_TX_PIN;
+	uart_pin_conf.mode = GPIO_PIN_ALT_FUN_MODE;
+	uart_pin_conf.op_type = GPIO_PIN_OP_TYPE_PUSHPULL;
+	uart_pin_conf.speed =  GPIO_PIN_SPEED_HIGH;
+	uart_pin_conf.pull  =  GPIO_PIN_NO_PULL_PUSH;
+	hal_gpio_set_alt_function(GPIOD,USART3_TX_PIN,USART3_TX_AF);
+	hal_gpio_init(GPIOD ,&uart_pin_conf);
+
+	/*configure the GPIO_PORT_D_PIN_9 as RX */
+	uart_pin_conf.pin = USART3_RX_PIN;
+	hal_gpio_set_alt_function(GPIOD,USART3_RX_PIN,USART3_TX_AF);
+	hal_gpio_init(GPIOD ,&uart_pin_conf);
+	}
+	{/*uart6*/
+	/*enable the clock for the GPIO port D */  
+	_HAL_RCC_GPIOD_CLK_ENABLE();
+	/*configure the GPIO_PORT_G_PIN_14 as TX */
+	uart_pin_conf.pin = USART6_TX_PIN;
+	uart_pin_conf.mode = GPIO_PIN_ALT_FUN_MODE;
+	uart_pin_conf.op_type = GPIO_PIN_OP_TYPE_PUSHPULL;
+	uart_pin_conf.speed =  GPIO_PIN_SPEED_HIGH;
+	uart_pin_conf.pull  =  GPIO_PIN_NO_PULL_PUSH;
+	hal_gpio_set_alt_function(GPIOG,USART6_TX_PIN,USART6_TX_AF);
+	hal_gpio_init(GPIOG ,&uart_pin_conf);
+
+	/*configure the GPIO_PORT_G_PIN_9 as RX */
+	uart_pin_conf.pin = USART6_RX_PIN;
+	hal_gpio_set_alt_function(GPIOG,USART6_RX_PIN,USART6_TX_AF);
+	hal_gpio_init(GPIOG ,&uart_pin_conf);
+	}
 
 }
 void pin_init(){
@@ -259,10 +252,11 @@ void pin_init(){
 	//int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
 	int adoPin = 8; //TODO: after defining TIMER PWM, SPI? anypin closer or easier to map
 	int myLed = 13;
-//TODO: GPIO init
+/*TODO: GPIO init*/
 	
 	//Servo myservo; //download the servo library and inspect how it works and use it in C code later
 	const int esc_sig_pin = SERVO_PIN; // PA5 TIMER2
+	
 //	pinMode(intPin, INPUT);
 //  digitalWrite(intPin, LOW);
 //  pinMode(adoPin, OUTPUT);
@@ -304,11 +298,11 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 	imu_state->mscale = MFS_16BITS; // Choose either 14-bit or 16-bit magnetometer resolution
 	imu_state->mmode = 0x06;        // 2 for 8 Hz, 6 for 100 Hz continuous magnetometer data read
 	for(int i = 0; i < 3; i++){
-		imu_state->magCalibration[i]= 0;
-		imu_state->magBias[i]= 0;
-		imu_state->magScale[i]= 0;
-		imu_state->accelBias[i]= 0;
-		imu_state->gyroBias[i]= 0;
+		imu_state->magCalibration[i]= 0.f;
+		imu_state->magBias[i]= 0.f;
+		imu_state->magScale[i]= 0.f;
+		imu_state->accelBias[i]= 0.f;
+		imu_state->gyroBias[i]= 0.f;
 		imu_state->q[i+1] =0.0f;
 		imu_state->eInt[i] =0.0f;
 	}
@@ -324,27 +318,17 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
 	
 	/* IMU identification, check and calibration */
 	
-	uint8_t c[4];
-	//initAK8963(handle, imu_state, imu_state->magCalibration);
+	uint8_t c;
 	
-	
-	
-	initMPU9250(handle, imu_state);
-	delay(5);
-	calibrateMPU9250(handle, imu_state->gyroBias, imu_state->accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
-	delay(5);
-	delay(5);
-	MPU9250SelfTest(handle, imu_state->SelfTest);
-  delay(5);
-  readBytes(handle, MPU9250_ADDRESS, WHO_AM_I_MPU9250<<0x01, 4, c);  // Read WHO_AM_I register for MPU-9250
+  c = readBytes(handle, MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
   if (SerialDebug) {
 		char *temp = NULL;
-		Sasprintf(temp, "MPU9250\nI AM %x  I should be %x", *c, 0x71); 
+		Sasprintf(temp, "MPU9250\nI AM %x  I should be %x", c, 0x71); 
 		uart_printf(temp);
 		free(temp);
   }
   delay(20);
-  if (*c == 0x71) // WHO_AM_I should always be 0x71
+  if (c == 0x71) // WHO_AM_I should always be 0x71
   {
     if (SerialDebug) {
       uart_printf("MPU9250 is online, now self-testing\n");
@@ -418,10 +402,10 @@ void imu_init(i2c_handle_t *handle, ImuState_t *imu_state)
   else
   {
     if (SerialDebug) {
-			char *temp = NULL;
-			Sasprintf(temp, "Could not connect to MPU9250: 0x%x", *c); 
-			uart_printf(temp);
-			free(temp);
+		char *temp = NULL;
+		Sasprintf(temp, "Could not connect to MPU9250: 0x%x", c); 
+		uart_printf(temp);
+		free(temp);
     }
     while (1) ; // Loop forever if communication doesn't happen
   }
@@ -471,11 +455,11 @@ void pass_function(void)
 /**
 	from USART
 **/
-
+/*error handler uart1*/
 void error_handler(void)
 {
-	 while(uart_handle.tx_state != HAL_UART_STATE_READY );
-	 hal_uart_tx(&uart_handle,message2, sizeof(message2)-1);
+	 while(uart_handle1.tx_state != HAL_UART_STATE_READY );
+	 hal_uart_tx(&uart_handle1,message2, sizeof(message2)-1);
 	
 }
 
@@ -495,20 +479,20 @@ void handle_cmd(int cmd, int led )
 				led_turn_on(GPIOD,led);
 				}
 				
-				hal_uart_tx(&uart_handle,message3, sizeof(message3)-1);
+				hal_uart_tx(&uart_handle1,message3, sizeof(message3)-1);
 			}else if (cmd == 'L')
 			{
 				if(led == (int) 0xff )
 				{
 					led_turn_off(GPIOD,LED_ORANGE);
-			 	 led_turn_off(GPIOD,LED_BLUE);
-				 led_turn_off(GPIOD,LED_GREEN);
-				 led_turn_off(GPIOD,LED_RED);
+					led_turn_off(GPIOD,LED_BLUE);
+					led_turn_off(GPIOD,LED_GREEN);
+					led_turn_off(GPIOD,LED_RED);
 					
 				}else
 				led_turn_off(GPIOD,led);
 				
-				hal_uart_tx(&uart_handle,message3, sizeof(message3)-1);
+				hal_uart_tx(&uart_handle1,message3, sizeof(message3)-1);
 			} 
 			else
 			{
@@ -587,15 +571,11 @@ int main(void)
 
 	uint32_t val;
 	/* operation variables */
-	ExperimentStatus expLoopStatus;
-	//declaring the ExperimentPayload
-	ExperimentPayload expPayload;
-	//declaring the ExperimentSetting
-	ExperimentSetting expSetting;
-	
+		
 	/* operation variables */
 	/* IMU */
 	ImuState_t imu_state;
+	SensorData sensorData;
 	/* IMU */
 	/* Servo */
 	uint32_t mid_point = (expSetting.pwmLimit - expSetting.arm) / 2 + expSetting.arm; //TODO is it possible to put in the structure?
@@ -654,7 +634,7 @@ int main(void)
 	hal_spi_init(&SpiHandle);
 	
 		/* Enable the IRQs in the NVIC */
-  NVIC_EnableIRQ(SPI2_IRQn);
+  	NVIC_EnableIRQ(SPI2_IRQn);
 
 	/* I2C set up */
 	_HAL_RCC_I2C1_CLK_ENABLE() ;
@@ -684,28 +664,79 @@ int main(void)
 	/*enable the clock for the USART2 Peripheral */
 	_HAL_RCC_USART2_CLK_ENABLE();   
 	
-	uart_handle.Instance          = USART_2;
+	uart_handle2.Instance          = USART_2;
 
-	uart_handle.Init.BaudRate     = USART_BAUD_9600;
-	uart_handle.Init.WordLength   = USART_WL_1S8B;
-	uart_handle.Init.StopBits     = UART_STOPBITS_1;
-	uart_handle.Init.Parity       = UART_PARITY_NONE;
-	uart_handle.Init.Mode         = UART_MODE_TX_RX;
-	uart_handle.Init.OverSampling = USART_OVER16_ENABLE;
+	uart_handle2.Init.BaudRate     = USART_BAUD_9600;
+	uart_handle2.Init.WordLength   = USART_WL_1S8B;
+	uart_handle2.Init.StopBits     = UART_STOPBITS_1;
+	uart_handle2.Init.Parity       = UART_PARITY_NONE;
+	uart_handle2.Init.Mode         = UART_MODE_TX_RX;
+	uart_handle2.Init.OverSampling = USART_OVER16_ENABLE;
+
+	_HAL_RCC_USART1_CLK_ENABLE();   
+	
+	uart_handle1.Instance          = USART_1;
+
+	uart_handle1.Init.BaudRate     = USART_BAUD_9600;
+	uart_handle1.Init.WordLength   = USART_WL_1S8B;
+	uart_handle1.Init.StopBits     = UART_STOPBITS_1;
+	uart_handle1.Init.Parity       = UART_PARITY_NONE;
+	uart_handle1.Init.Mode         = UART_MODE_TX_RX;
+	uart_handle1.Init.OverSampling = USART_OVER16_ENABLE;
+
+	_HAL_RCC_USART3_CLK_ENABLE();   
+	
+	uart_handle3.Instance          = USART_3;
+
+	uart_handle3.Init.BaudRate     = USART_BAUD_9600;
+	uart_handle3.Init.WordLength   = USART_WL_1S8B;
+	uart_handle3.Init.StopBits     = UART_STOPBITS_1;
+	uart_handle3.Init.Parity       = UART_PARITY_NONE;
+	uart_handle3.Init.Mode         = UART_MODE_TX_RX;
+	uart_handle3.Init.OverSampling = USART_OVER16_ENABLE;
+
+	_HAL_RCC_USART6_CLK_ENABLE();   
+	
+	uart_handle6.Instance          = USART_6;
+
+	uart_handle6.Init.BaudRate     = USART_BAUD_9600;
+	uart_handle6.Init.WordLength   = USART_WL_1S8B;
+	uart_handle6.Init.StopBits     = UART_STOPBITS_1;
+	uart_handle6.Init.Parity       = UART_PARITY_NONE;
+	uart_handle6.Init.Mode         = UART_MODE_TX_RX;
+	uart_handle6.Init.OverSampling = USART_OVER16_ENABLE;
 
 /*fill out the application callbacks for UART*/
-	uart_handle.tx_cmp_cb = app_tx_cmp_callback;
-	uart_handle.rx_cmp_cb = app_rx_cmp_callback;
+	uart_handle1.tx_cmp_cb = app_tx_cmp_callback;
+	uart_handle1.rx_cmp_cb = app_rx_cmp_callback;
 	
-	 hal_uart_init(&uart_handle);
+	hal_uart_init(&uart_handle1);
+
+	uart_handle2.tx_cmp_cb = app_tx_cmp_callback;
+	uart_handle2.rx_cmp_cb = app_rx_cmp_callback;
+	
+	hal_uart_init(&uart_handle2);
+
+	uart_handle3.tx_cmp_cb = app_tx_cmp_callback;
+	uart_handle3.rx_cmp_cb = app_rx_cmp_callback;
+	
+	hal_uart_init(&uart_handle3);
+
+	uart_handle6.tx_cmp_cb = app_tx_cmp_callback;
+	uart_handle6.rx_cmp_cb = app_rx_cmp_callback;
+	
+	hal_uart_init(&uart_handle6);
 
 /*enable the IRQ of USART2 peripheral */
-	 NVIC_EnableIRQ(USARTx_IRQn);
+	NVIC_EnableIRQ(USART1_IRQn);
+	NVIC_EnableIRQ(USART2_IRQn);
+	NVIC_EnableIRQ(USART3_IRQn);
+	NVIC_EnableIRQ(USART6_IRQn);
 
-  while(uart_handle.tx_state != HAL_UART_STATE_READY );
+  while(uart_handle1.tx_state != HAL_UART_STATE_READY );
 	/*Send the message */
 	//uint8_t message1[] = "STM32F4xx Discovery board \n UART Sample App test\n June , 2016 \n";
-	hal_uart_tx(&uart_handle,message1, sizeof(message1)-1);
+	hal_uart_tx(&uart_handle1,message1, sizeof(message1)-1);
 
 	
 /* First initilaize the Debug UART */
@@ -737,7 +768,8 @@ int main(void)
 
 	while(1)
 	{	
-		//Servo motor run
+		sampleIMUtoSensor(&i2c_handle, &imu_state, &sensorData);
+		/*//Servo motor run
 		//TODO implement PWM servo driver
 		uint32_t requiredTime = expSetting.requiredSampleTime * 1000;
 		uint32_t experiment_time_loop = 0;
@@ -751,16 +783,16 @@ int main(void)
 		expLoopStatus.pwmSpeed += expSetting.rotationSpeedIncrement;
 		sampleIMU(&i2c_handle, &imu_state);
 		//for continous I2C and SPI
-		// asking mpu9520 with an interval and talk to spi if needed.
+		// asking mpu9520 with an interval and talk to spi if needed.*/
 		/* USART block */
 		//TODO : EXT1 or EXT0 pull down check the lin
 		// if the signal function is set to low then -> interrupt to get this instead of while
 		
 		
 		//check again 
-		while(uart_handle.rx_state != HAL_UART_STATE_READY );
+		while(uart_handle1.rx_state != HAL_UART_STATE_READY );
 		/*receive the message */
-		hal_uart_rx(&uart_handle,rx_buffer, 5 );
+		hal_uart_rx(&uart_handle1,rx_buffer, 5 );
 		
 		/* SPI block */
 		//check for state ready 
@@ -961,9 +993,21 @@ void I2C1_EV_IRQHandler(void)
 
 /////////////////////USARTx helper funcations and IRQ handlers///////////////////////
 //This is the ISR for the USARTx interrupt , defined in the hal_uart_driver.h
-void USARTx_IRQHandler(void)
+void USART1_IRQHandler(void)
 {
-  hal_uart_handle_interrupt(&uart_handle);
+  hal_uart_handle_interrupt(&uart_handle1);
+}
+void USART2_IRQHandler(void)
+{
+  hal_uart_handle_interrupt(&uart_handle2);
+}
+void USART3_IRQHandler(void)
+{
+  hal_uart_handle_interrupt(&uart_handle3);
+}
+void USART6_IRQHandler(void)
+{
+  hal_uart_handle_interrupt(&uart_handle6);
 }
 
 /* SysTick Exception handler */

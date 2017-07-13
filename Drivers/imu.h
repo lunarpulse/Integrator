@@ -9,7 +9,7 @@
 #define PACKSIZE 32
 #define SENSORNUM 2
 #define EXPDEBUG1 true
-#define SerialDebug 1// set to true to get Serial output for debugging
+#define SERIALDEBUG // set to true to get Serial output for debugging
 #define PI           3.14159265358979323846f  /* pi */
 //Magnetometer Registers
 #define AK8963_ADDRESS   0x0C<<1
@@ -156,7 +156,7 @@
 
 typedef enum { false, true } bool;
 
-#define AHRS true         // set to false for basic data read
+#define AHRS   // set to false for basic data read
 
 
 #define TIMEGAP 10
@@ -255,7 +255,7 @@ typedef	struct
 	
 }ImuState_t;
 //void sampleIMUtoSensor(i2c_handle_t *handle, ImuState_t *imu_state , SensorData * sensorData);
-void sampleIMU(i2c_handle_t *handle, ImuState_t *imu_state);
+int sampleIMU(i2c_handle_t *handle, ImuState_t *imu_state);
 void getAres(ImuState_t *imu_state);
 void getGres(ImuState_t *imu_state);
 void getMres(ImuState_t *imu_state);
